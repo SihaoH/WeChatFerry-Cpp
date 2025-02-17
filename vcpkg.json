@@ -1,0 +1,14 @@
+{
+    "name": "wcf-qt",
+    "dependencies": [
+        {
+            "name": "protobuf",
+            "features": [ "zlib" ]
+        },
+        "spdlog",
+        "nng",
+        "magic-enum",
+        "minhook",
+        "mp3lame"
+    ]
+}
