@@ -1,0 +1,6 @@
+[submodule "WeChatFerry"]
+	path = WeChatFerry
+	url = https://github.com/lich0821/WeChatFerry.git
+[submodule "SilkMp3Converter"]
+	path = SilkMp3Converter
+	url = https://github.com/lich0821/SilkMp3Converter.git
