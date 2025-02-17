@@ -36,6 +36,7 @@ target_link_libraries(${PROJ_NAME}
     nnrpc
     nng::nng
 )
+target_compile_definitions(${PROJ_NAME} PRIVATE "_UNICODE")
 
 # 修改从VS启动时的工作目录路径
 set_target_properties(${PROJ_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_OUTPUT_DIRECTORY_INTDIR})

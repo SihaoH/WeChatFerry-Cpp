@@ -20,7 +20,6 @@ set(HEADERS
 )
 
 add_library(${TARGET} SHARED ${SOURCES} ${HEADERS})
-add_dependencies(${TARGET} spy)
 target_link_libraries(${TARGET}
     PRIVATE
     fmt::fmt
