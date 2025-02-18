@@ -26,8 +26,12 @@ target_link_libraries(${TARGET}
     mp3lame::mp3lame
 )
 
-target_include_directories(${TARGET} PUBLIC ${SMC_DIR})
-target_include_directories(${TARGET} PRIVATE ${SMC_DIR}/SILK_SDK_SRC_FLP_v1.0.9/src)
-target_include_directories(${TARGET} PRIVATE ${SMC_DIR}/SILK_SDK_SRC_FLP_v1.0.9/interface)
+target_include_directories(${TARGET}
+    PUBLIC
+    ${SMC_DIR}
+    PRIVATE
+    ${SMC_DIR}/SILK_SDK_SRC_FLP_v1.0.9/src
+    ${SMC_DIR}/SILK_SDK_SRC_FLP_v1.0.9/interface
+)
 
 target_compile_options(${TARGET} PRIVATE "/permissive-" "/MT$<$<CONFIG:Debug>:d>")

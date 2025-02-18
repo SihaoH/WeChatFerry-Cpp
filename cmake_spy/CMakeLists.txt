@@ -4,43 +4,7 @@ find_package(fmt REQUIRED)
 find_package(nng REQUIRED)
 find_package(minhook REQUIRED)
 
-set(NNRPC_SOURCES
-    ${WCF_DIR}/rpc/nanopb/pb.h
-    ${WCF_DIR}/rpc/nanopb/pb_common.c
-    ${WCF_DIR}/rpc/nanopb/pb_common.h
-    ${WCF_DIR}/rpc/nanopb/pb_decode.c
-    ${WCF_DIR}/rpc/nanopb/pb_decode.h
-    ${WCF_DIR}/rpc/nanopb/pb_encode.c
-    ${WCF_DIR}/rpc/nanopb/pb_encode.h
-    ${WCF_DIR}/rpc/pb_types.h
-    ${WCF_DIR}/rpc/pb_util.cpp
-    ${WCF_DIR}/rpc/pb_util.h
-    ${WCF_DIR}/rpc/proto/wcf.pb.c
-    ${WCF_DIR}/rpc/proto/wcf.pb.h
-    ${WCF_DIR}/rpc/proto/wcf.proto
-)
-set_source_files_properties(${WCF_DIR}/rpc/proto/wcf.pb.c PROPERTIES GENERATED TRUE)
-set_source_files_properties(${WCF_DIR}/rpc/proto/wcf.pb.h PROPERTIES GENERATED TRUE)
-add_library(nnrpc STATIC ${NNRPC_SOURCES})
-target_include_directories(nnrpc
-    PUBLIC
-    ${WCF_DIR}/com
-    ${WCF_DIR}/rpc
-    ${WCF_DIR}/rpc/nanopb
-    ${WCF_DIR}/rpc/proto
-    ${VCPKG_INCLUDE_DIR}
-)
-target_compile_options(nnrpc PRIVATE "/permissive-" "/EHa" "/utf-8" "/MT$<$<CONFIG:Debug>:d>")
-
-add_custom_command(
-    TARGET nnrpc PRE_BUILD
-    COMMAND ${WCF_DIR}/rpc/tool/protoc --nanopb_out=. wcf.proto
-    DEPENDS ${WCF_DIR}/rpc/proto/wcf.proto
-    WORKING_DIRECTORY ${WCF_DIR}/rpc/proto
-    COMMENT "Generating PB files"
-)
-
-set(SPY_SOURCES
+set(SOURCES
     ${WCF_DIR}/com/log.cpp
     ${WCF_DIR}/com/util.cpp
     ${WCF_DIR}/rpc/nanopb/pb_common.c
@@ -60,8 +24,7 @@ set(SPY_SOURCES
     ${WCF_DIR}/spy/user_info.cpp
     ${WCF_DIR}/spy/spy.def
 )
-
-set(SPY_HEADERS
+set(HEADERS
     ${WCF_DIR}/com/log.h
     ${WCF_DIR}/com/util.h
     ${WCF_DIR}/smc/codec.h
@@ -80,7 +43,7 @@ set(SPY_HEADERS
     ${WCF_DIR}/spy/user_info.h
 )
 
-add_library(${TARGET} SHARED ${SPY_SOURCES} ${SPY_HEADERS})
+add_library(${TARGET} SHARED ${SOURCES} ${HEADERS})
 target_link_libraries(${TARGET}
     PRIVATE
     smc
@@ -99,4 +62,3 @@ target_link_options(${TARGET} PRIVATE "/SUBSYSTEM:WINDOWS")
 
 # DEBUG版本下生成的dll名称带_debug后缀
 set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME ${TARGET}$<$<CONFIG:Debug>:_debug>)
-
