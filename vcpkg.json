@@ -1,5 +1,5 @@
 {
-    "name": "wcf-qt",
+    "name": "wcf-cpp",
     "dependencies": [
         {
             "name": "protobuf",
