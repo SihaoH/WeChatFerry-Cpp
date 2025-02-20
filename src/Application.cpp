@@ -155,7 +155,7 @@ void Application::pullContacts()
             } else if(contact.gender == 2) {
                 app_contact.attr = QStringLiteral("女");
             } else {
-                LOG(debug) << QStringLiteral("未知属性的联系人：") << app_contact.name;
+                app_contact.attr = QStringLiteral("个人");
             }
         }
         contactList.insert(wxid, app_contact);
@@ -211,7 +211,6 @@ void Application::asyncReceiving()
             continue;
         }
 
-        QMutexLocker locker(&mutex);
         QString wxid;
         if (wxmsg.is_group) {
             if (wxmsg.is_self) {
@@ -219,20 +218,13 @@ void Application::asyncReceiving()
                 continue;
             }
             wxid = wxmsg.roomid;
-            auto& app_msg = msgList[wxid];
-            QString sentence = QStringLiteral("有人说: ");
-            if (contactList.contains(wxmsg.sender)) {
-                sentence = contactList[wxmsg.sender].name + QStringLiteral("说: ");
-            }
-            sentence.append(wxmsg.content);
-            app_msg.conent.append(sentence);
-            app_msg.timestamp = QDateTime::currentSecsSinceEpoch();
         } else {
             wxid = wxmsg.sender;
-            auto& app_msg = msgList[wxid];
-            app_msg.conent.append(wxmsg.content);
-            app_msg.timestamp = QDateTime::currentSecsSinceEpoch();
         }
+
+        QMutexLocker locker(&mutex);
+        msgList[wxid].conent.append(content);
+        msgList[wxid].timestamp = QDateTime::currentSecsSinceEpoch();
     }
 }
 
@@ -242,18 +234,9 @@ void Application::onHandle()
         const auto& wxid = i.key();
         const auto& app_msg = i.value();
         // 超过特定时间没有新消息就开始让机器人回复
-        if (QDateTime::currentSecsSinceEpoch() - app_msg.timestamp > 10) {
-            auto speaker = contactList[wxid];
-            QString content;
-            if (speaker.attr == QStringLiteral("群聊")) {
-                content.append(QStringLiteral("在 %1 群聊里:\n").arg(speaker.name))
-                    .append(app_msg.conent.join("\n"));
-            } else {
-                content.append(QStringLiteral("%1 说:\n").arg(speaker.name))
-                    .append(app_msg.conent.join("\n"));
-            }
-
-            auto reply = chatRobot->talk(content);
+        if (QDateTime::currentSecsSinceEpoch() - app_msg.timestamp > 3) {
+            QString content = app_msg.conent.join("。\n");
+            auto reply = chatRobot->talk(wxid, content);
             if (whiteList.contains(wxid)) {
                 Request req = Request_init_default;
                 req.func = Functions_FUNC_SEND_TXT;
@@ -264,7 +247,7 @@ void Application::onHandle()
                 req.msg.txt.msg = (char*)msg.constData();
                 sendRequest(req);
             } else {
-                LOG(debug) << reply;
+                LOG(debug) << content << " => " << reply;
             }
 
             QMutexLocker locker(&mutex);

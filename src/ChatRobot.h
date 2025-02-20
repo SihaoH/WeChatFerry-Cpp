@@ -8,7 +8,8 @@ public:
     ~ChatRobot();
 
     void setPrompt(const QString& prompt);
-    QString talk(const QString& content);
+    void setModel(const QString& _model);
+    QString talk(const QString& wxid, const QString& content);
 
 private:
     class ChatRobotPrivate* p = nullptr;

@@ -10,24 +10,37 @@ public:
     ~ChatRobotPrivate() = default;
 
     void setPrompt(const QString& prompt);
-    QString talk(const QString& content);
+    void setModel(const QString& _model);
+    QString talk(const QString& wxid, const QString& content);
 
 private:
     std::string model = "llama3.2:1b";
     Ollama ollama;
-    ollama::response context;
+    ollama::response priContext;
+    QMap<QString, ollama::response> contextMap;
 };
 
 void ChatRobotPrivate::setPrompt(const QString& prompt)
 {
-    context = ollama.generate(model, std::string(prompt.toUtf8()));
+    priContext = ollama.generate(model, std::string(prompt.toUtf8()));
 }
 
-QString ChatRobotPrivate::talk(const QString& content)
+void ChatRobotPrivate::setModel(const QString& _model)
 {
-    context = ollama.generate(model, std::string(content.toUtf8()), context);
-    QString reply = QString::fromStdString(context.as_simple_string());
-    reply = reply.trimmed();
+    model = std::string(_model.toUtf8());
+}
+
+QString ChatRobotPrivate::talk(const QString& wxid, const QString& content)
+{
+    QString reply;
+    ollama::response context;
+    if (contextMap.contains(wxid)) {
+        context = ollama.generate(model, std::string(content.toUtf8()), contextMap[wxid]);
+    } else {
+        context = ollama.generate(model, std::string(content.toUtf8()), priContext);
+    }
+    contextMap[wxid] = context;
+    reply = QString::fromStdString(context.as_simple_string()).trimmed();
     return reply;
 }
 
@@ -46,7 +59,12 @@ void ChatRobot::setPrompt(const QString& prompt)
     p->setPrompt(prompt);
 }
 
-QString ChatRobot::talk(const QString& content)
+void ChatRobot::setModel(const QString& _model)
 {
-    return p->talk(content);
+    p->setModel(_model);
+}
+
+QString ChatRobot::talk(const QString& wxid, const QString& content)
+{
+    return p->talk(wxid, content);
 }
