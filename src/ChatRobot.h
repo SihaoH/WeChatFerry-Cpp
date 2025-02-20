@@ -1,17 +1,12 @@
 #pragma once
-#include <QObject>
+#include <QString>
 
-class ChatRobot : public QObject
+class ChatRobot
 {
-    Q_OBJECT
 public:
-    ChatRobot(QObject* parent);
+    ChatRobot();
     ~ChatRobot();
 
-    void setContacts();
     void setPrompt(const QString& prompt);
-    void tell(const QString& wxid, const QString& content);
-
-signals:
-    void aboutToReply(const QString& wxid, const QString& content);
+    QString talk(const QString& content);
 };

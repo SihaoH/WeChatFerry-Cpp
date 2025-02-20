@@ -1,7 +1,6 @@
-#include "ChatRobot.h"
+﻿#include "ChatRobot.h"
 
-ChatRobot::ChatRobot(QObject* parent)
-    : QObject(parent)
+ChatRobot::ChatRobot()
 {
 }
 
@@ -9,14 +8,11 @@ ChatRobot::~ChatRobot()
 {
 }
 
-void ChatRobot::setContacts()
-{
-}
-
 void ChatRobot::setPrompt(const QString& prompt)
 {
 }
 
-void ChatRobot::tell(const QString& wxid, const QString& content)
+QString ChatRobot::talk(const QString& content)
 {
+    return QStringLiteral("自动回复：\n")+content;
 }
