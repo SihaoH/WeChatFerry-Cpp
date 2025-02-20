@@ -35137,8 +35137,8 @@ namespace ollama
                 return type;
             }
 
-            //operator std::string() const { return this->as_simple_string(); }
-            operator std::__cxx11::basic_string<char>() const { return this->as_simple_string(); }
+            operator std::string() const { return this->as_simple_string(); }
+            //operator std::__cxx11::basic_string<char>() const { return this->as_simple_string(); }
             //const operator std::string() const { return this->as_simple_string(); }           
 
 

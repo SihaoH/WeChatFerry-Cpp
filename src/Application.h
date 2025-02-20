@@ -32,6 +32,7 @@ private:
     void initWCF();
     void initNngClient();
     void initChatRobot();
+    void initWhiteList();
     bool isWeChatRunning();
     void asyncReceiving();
 
@@ -45,6 +46,7 @@ private:
     class NngSocket* reqSocket = nullptr;
     class NngSocket* msgSocket = nullptr;
     class ChatRobot* chatRobot = nullptr;
+    QList<QString> whiteList;
     QMap<QString, AppMessage_t> msgList;
     QMap<QString, AppContact_t> contactList;
     QMutex mutex;

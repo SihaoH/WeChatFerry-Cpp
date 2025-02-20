@@ -9,4 +9,7 @@ public:
 
     void setPrompt(const QString& prompt);
     QString talk(const QString& content);
+
+private:
+    class ChatRobotPrivate* p = nullptr;
 };

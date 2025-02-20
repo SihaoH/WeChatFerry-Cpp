@@ -5,6 +5,7 @@
 #include "ChatRoBot.h"
 #include <QTimer>
 #include <QProcess>
+#include <QFile>
 #include <QtConcurrent>
 
 constexpr const char* NNG_HOST = "tcp://127.0.0.1";
@@ -20,6 +21,7 @@ Application::Application(int& argc, char** argv)
     initWCF();
     initNngClient();
 
+    initWhiteList();
     initChatRobot();
     waitForLogin();
     pullContacts();
@@ -67,24 +69,23 @@ QSharedPointer<Response> Application::sendRequest(const Request& req)
 void Application::initWCF()
 {
     if (isWeChatRunning()) {
-        LOG(info) << QStringLiteral("微信正在运行，跳过注入wcf步骤！");
+        LOG(info) << QStringLiteral("初始化WCF：微信正在运行，跳过注入步骤！");
 
     } else {
-        LOG(info) << QStringLiteral("微信没有运行，启动微信并注入wcf");
+        LOG(info) << QStringLiteral("初始化WCF：微信没有运行，启动微信并注入...");
         int ret = 0;
     #if _DEBUG
         ret = WxInitSDK(true, nngPort);
     #else
         ret = WxInitSDK(false, nngPort);
     #endif
-        if (ret != 0) {
-            LOG(info) << QStringLiteral("注入wcf失败，请确认并重启程序！");
-        }
+        Q_ASSERT_X(ret == 0, "初始化WCF", "注入失败，请确认并重启程序!");
     }
 }
 
 void Application::initNngClient()
 {
+    LOG(info) << QStringLiteral("初始化NNG：连接NNG服务端...");
     reqSocket = new NngSocket();
     msgSocket = new NngSocket();
     reqSocket->connectToHost(NNG_HOST, nngPort);
@@ -94,26 +95,43 @@ void Application::initNngClient()
 
 void Application::initChatRobot()
 {
+    LOG(info) << QStringLiteral("初始化聊天机器人：读取prompt文件内容喂给AI...");
     chatRobot = new ChatRobot;
-    chatRobot->setPrompt(QStringLiteral("你扮演一个聊天机器人，会有不同的人来跟你说话，你需要直接做出回复，每条回复尽量简短，不超过50个字"));
+    QFile config("./prompt");
+    if (config.exists() && config.open(QIODeviceBase::ReadOnly)) {
+        chatRobot->setPrompt(config.readAll());
+    }
+}
+
+void Application::initWhiteList()
+{
+    LOG(info) << QStringLiteral("初始化自动回复的白名单：读取whitelist文件...");
+    // 自动回复的白名单，若不在此则不回复
+    QFile config("./whitelist");
+    if (config.exists() && config.open(QIODeviceBase::ReadOnly)) {
+        const QString content = config.readAll();
+        whiteList.append(content.split("\r\n"));
+    }
 }
 
 void Application::waitForLogin()
 {
+    LOG(info) << QStringLiteral("等待/确认用户登录...");
     Request req = Request_init_default;
     req.func = Functions_FUNC_IS_LOGIN;
     req.which_msg = Response_status_tag;
     for (;;) {
-        QThread::sleep(1);
         auto rsp = sendRequest(req);
         if ((*rsp).msg.status > 0) {
             break;
         }
+        QThread::sleep(1);
     }
 }
 
 void Application::pullContacts()
 {
+    LOG(info) << QStringLiteral("拉取联系人清单...");
     Request req = Request_init_default;
     req.func = Functions_FUNC_GET_CONTACTS;
     req.which_msg = Request_func_tag;
@@ -141,6 +159,15 @@ void Application::pullContacts()
             }
         }
         contactList.insert(wxid, app_contact);
+    }
+
+    // 将联系人清单写入文件，方便后续操作
+    QFile file("./contacts");
+    if (file.open(QIODeviceBase::WriteOnly)) {
+        file.resize(0);
+        for (auto i = contactList.cbegin(), end = contactList.cend(); i != end; ++i) {
+            file.write(QString("%1 %2\n").arg(i.key()).arg(i.value().name).toUtf8());
+        }
     }
 }
 
@@ -178,7 +205,8 @@ void Application::asyncReceiving()
         // 获取wx接收的信息
         auto rsp = DataUtil::toResponse(msgSocket->waitForRecv());
         auto wxmsg = (*rsp).msg.wxmsg;
-        if (QString(wxmsg.content).startsWith("<?xml version="1.0"?>")) {
+        auto content = QString(wxmsg.content);
+        if (content.startsWith("<msg>") || content.startsWith("<?xml version=\"1.0\"?>")) {
             // 特殊消息，先不处理
             continue;
         }
@@ -186,6 +214,10 @@ void Application::asyncReceiving()
         QMutexLocker locker(&mutex);
         QString wxid;
         if (wxmsg.is_group) {
+            if (wxmsg.is_self) {
+                // 如果是群聊里面自己说的就不管
+                continue;
+            }
             wxid = wxmsg.roomid;
             auto& app_msg = msgList[wxid];
             QString sentence = QStringLiteral("有人说: ");
@@ -220,17 +252,20 @@ void Application::onHandle()
                 content.append(QStringLiteral("%1 说:\n").arg(speaker.name))
                     .append(app_msg.conent.join("\n"));
             }
-            auto reply = chatRobot->talk(content);
 
-            Request req = Request_init_default;
-            req.func = Functions_FUNC_SEND_TXT;
-            req.which_msg = Request_txt_tag;
-            QByteArray receiver = wxid.toUtf8();
-            QByteArray msg = reply.toUtf8();
-            req.msg.txt.receiver = (char*)receiver.constData();
-            req.msg.txt.msg = (char*)msg.constData();
-            //sendRequest(req);
-            LOG(debug) << reply;
+            auto reply = chatRobot->talk(content);
+            if (whiteList.contains(wxid)) {
+                Request req = Request_init_default;
+                req.func = Functions_FUNC_SEND_TXT;
+                req.which_msg = Request_txt_tag;
+                QByteArray receiver = wxid.toUtf8();
+                QByteArray msg = reply.toUtf8();
+                req.msg.txt.receiver = (char*)receiver.constData();
+                req.msg.txt.msg = (char*)msg.constData();
+                sendRequest(req);
+            } else {
+                LOG(debug) << reply;
+            }
 
             QMutexLocker locker(&mutex);
             msgList.remove(wxid);
