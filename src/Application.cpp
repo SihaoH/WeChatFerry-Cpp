@@ -251,9 +251,9 @@ void Application::asyncReceiving()
                 // 如果是群聊里面自己说的就不管
                 continue;
             }
-            wxid = wxmsg.roomid;
+            wxid = QString(wxmsg.roomid);
         } else {
-            wxid = wxmsg.sender;
+            wxid = QString(wxmsg.sender);
         }
 
         QMutexLocker locker(&mutex);
@@ -269,9 +269,9 @@ void Application::onHandle()
         const auto& app_msg = i.value();
         // 超过特定时间没有新消息就开始让机器人回复
         if (QDateTime::currentSecsSinceEpoch() - app_msg.timestamp > waitTime) {
-            QString content = app_msg.conent.join("。\n");
-            auto reply = chatRobot->talk(wxid, content);
+            QString content = app_msg.conent.join("\n");
             if (whiteList.contains(wxid)) {
+                auto reply = chatRobot->talk(wxid, content);
                 Request req = Request_init_default;
                 req.func = Functions_FUNC_SEND_TXT;
                 req.which_msg = Request_txt_tag;
@@ -281,7 +281,7 @@ void Application::onHandle()
                 req.msg.txt.msg = (char*)msg.constData();
                 sendRequest(req);
             } else {
-                LOG(debug) << content << " => " << reply;
+                LOG(debug) << wxid << ": " << content;
             }
 
             QMutexLocker locker(&mutex);

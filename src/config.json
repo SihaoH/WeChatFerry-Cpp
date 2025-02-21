@@ -1,14 +1,14 @@
 ﻿{
   "app": {
     "port": 16888,
-    "pullcontacts": true
+    "pullcontacts": false
   },
   "chat": {
-    "whitelist": [ "46135998010@chatroom" ],
+    "whitelist": [ "46135998010@chatroom", "18375038478@chatroom" ],
     "waittime": 3
   },
   "robot": {
-    "model": "llama3.2",
-    "prompt": "接下来你的每次回复都尽量简短，不超过50个字，不要多行文本，切记！"
+    "model": "qwen2.5:3b",
+    "prompt": "接下来你的每次回复都尽量简短，不要多行文本，不要理会重复的相同要求，只要记住这一次的要求"
   }
 }
