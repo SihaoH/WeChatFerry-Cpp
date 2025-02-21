@@ -1,10 +1,8 @@
 # WeChatFerry-Cpp
 
-这是一个Windows PC版微信注入的C++客户端，可以在自己的程序里操作微信进行收发消息等操作；使用了WeChatFerry（后面简称wcf），因为wcf是用C++写的，所以C++客户端可以更方便调试以及学习wcf的源码。
+0.1分支引入了Qt6，主要是为了更好的处理中文字符串（其实是工作用习惯了）
 
-wcf源码直接使用VS2019进行编译，对想使用其他版本编译器的同学不太友好，所以改用了cmake来构建。经测试VS2022一切正常，其他版本应该也可以。
-
-*主线只提供基本能跑的例子，更多功能请切换其他分支*
+整体流程：启动后注入WCF，读取config.json文件进行相关配置，等待用户登录，确认登录后开始监听微信消息，将收取到的消息放到列表里，每秒进行一次处理，若同一人/群聊超过指定时间没有新消息，就合并起来丢给大模型，大模型生成的回答就直接回复（会判断白名单，是否需要回复）
 
 ## 依赖
 ### 编译工具链
@@ -19,28 +17,38 @@ cd vcpkg && bootstrap-vcpkg.bat
 ```
 然后将vcpkg.exe的路径添加到系统环境变量PATH里
 
-## 引用
-### WeChatFerry v39.3.5
-微信注入框架，支持微信3.9.11.25的版本；微信安装包可以从[这里](https://github.com/lich0821/WeChatFerry/releases/download/v39.3.5/WeChatSetup-3.9.11.25.exe)获取。（务必在通用设置里关掉自动更新）
+### Qt6.8.2
+可以直接使用在线安装包按照，不过还是建议自己下载源码来构建。目前只需编译qt-base模块即可。
 
-### SilkMp3Converter v0.9.2
-语音转mp3，编译WeChatFerry需要用到
+#### 参考
+https://doc.qt.io/qt-6/getting-sources-from-git.html
 
-## 模块
-### smc
-即SilkMp3Converter，语音数据转mp3文件
+https://doc.qt.io/qt-6/windows-building.html
 
-### spy
-wcf的dll注入核心，生成的spy.dll会被注入到微信进程；独立编译，如果首次构建或改了spy的源码，需要单独生成或生成ALL_BUILD
+https://doc.qt.io/qt-6/configure-options.html
 
-### sdk
-wcf的其中一个模块，封装了一些dll注入的操作函数，主要是给其他语言的客户端使用，但咱也可以用
+#### 下载源码
+`git clone --branch v6.8.2 git://code.qt.io/qt/qt5.git .\src`
 
-### nnrpc
-进程通信相关，原本是直接编译到spy里面的，但由于RPC使用protobuf作为数据格式，客户端也能直接复用，所以就分离出来作为独立的静态库模块
+#### 生成
+```
+mkdir build
+cd build
+..\src\configure.bat -init-submodules -submodules qtbase
+..\src\configure.bat -debug-and-release -prefix <path-to-qt>
+cmake --build . --parallel
+cmake --install .
+cmake --install . --config debug
+```
+*上述步骤有两次install，第一次默认是只安装release*
+最后将`<path-to-qt>\bin`添加到系统环境变量PATH中里
 
-### app
-客户端exe
+### ollama
+ChatRobot类接入了ollama，实现使用AI自动回复的功能。
+ollama需要自行去[官网下载](https://ollama.com/)并安装运行，推荐使用qwen2.5模型，更符合聊天的场景。
+
+## 设计思路
+主要的功能和完整的流程都在Application类中实现了，DataUtil和NngClient是为了更好地管理对象的释放，使用C++类和智能指针将数据收发和数据处理封装了一层。
 
 ## 构建
 clone源码并进入到源码目录下
@@ -51,11 +59,3 @@ cmake .. -G "Visual Studio 17 2022"
 ```
 
 最后打开build/WeChatFerry-Cpp.sln进行编译和调试
-
-## 运行/调试
-如果在VS里面直接运行，需要先将app设置为启动项。
-
-目前客户端就一个main.cpp，比较简陋，只能获取微信接收的信息，后续完善。
-因为spy.dll注入之后，只要不退微信，就能一直hook。所以不会每次启动客户端都调用WxInitSDK和WxDestroySDK。
-
-想调试spy的源码，需要附加到WeChat.exe进程。
