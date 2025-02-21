@@ -80,7 +80,7 @@ QSharedPointer<Response> DataUtil::toResponse(const QByteArray& data)
     return rsp_ptr;
 }
 
-QList<RpcContact_t> DataUtil::getContacts(const QByteArray& data)
+vector<RpcContact_t> DataUtil::getContacts(const QByteArray& data)
 {
     vector<RpcContact_t> contacts;
     QSharedPointer<Response> rsp_ptr = QSharedPointer<Response>(new Response, releaseResponse);
@@ -90,5 +90,5 @@ QList<RpcContact_t> DataUtil::getContacts(const QByteArray& data)
     (*rsp_ptr).msg.contacts.contacts.arg = &contacts;
     pb_istream_t stream = pb_istream_from_buffer((const pb_byte_t*)data.data(), data.size());
     pb_decode_ex(&stream, Response_fields, rsp_ptr.get(), PB_DECODE_NOINIT);
-    return QList<RpcContact_t>(contacts.begin(), contacts.end());
+    return contacts;
 }
