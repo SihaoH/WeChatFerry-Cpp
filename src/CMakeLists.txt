@@ -37,3 +37,10 @@ target_compile_definitions(${TARGET} PRIVATE "_UNICODE")
 
 # 修改从VS启动时的工作目录路径
 set_target_properties(${TARGET} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_OUTPUT_DIRECTORY_INTDIR})
+
+# 拷贝配置文件
+add_custom_command(
+    TARGET ${TARGET} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/config.json ${CMAKE_OUTPUT_DIRECTORY_INTDIR}/config.json
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/config.json
+)

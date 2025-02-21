@@ -7,6 +7,12 @@
 #include <QProcess>
 #include <QFile>
 #include <QtConcurrent>
+#include <QFileSystemWatcher>
+
+#include <QJsonDocument>
+#include <QJsonValue>
+#include <QJsonObject>
+#include <QJsonArray>
 
 constexpr const char* NNG_HOST = "tcp://127.0.0.1";
 
@@ -15,22 +21,9 @@ Application::Application(int& argc, char** argv)
 {
     Logger::instance()->init("app");
 
-    if (argc >= 2) {
-        nngPort = QString(argv[1]).toInt();
-    }
-    initWCF();
-    initNngClient();
-
-    initWhiteList();
-    initChatRobot();
-    waitForLogin();
-    pullContacts();
-    startReceiveMessage();
-
-    handleTimer = new QTimer(this);
-    handleTimer->setInterval(1000);
-    handleTimer->start();
-    connect(handleTimer, &QTimer::timeout, this, &Application::onHandle);
+    reloadConfig(true);
+    initHandler();
+    initConfigWatcher();
 }
 
 Application::~Application()
@@ -66,6 +59,52 @@ QSharedPointer<Response> Application::sendRequest(const Request& req)
     return DataUtil::toResponse(sendRequestRaw(req));
 }
 
+void Application::reloadConfig(bool is_first)
+{
+    QFile file(configFile);
+    if (file.exists() && file.open(QIODeviceBase::ReadOnly)) {
+        QJsonParseError parse_err;
+        auto json_doc = QJsonDocument::fromJson(file.readAll(), &parse_err);
+        if (parse_err.error == QJsonParseError::NoError) {
+            auto json_obj = json_doc.object();
+
+            auto cfg_app = json_obj.value("app").toObject();
+            if (!cfg_app.isEmpty()) {
+                if (is_first) {
+                    nngPort = cfg_app.value("port").toInt();
+                    initWCF();
+                    initNngClient();
+                }
+                if (cfg_app.value("pullcontacts").toBool()) {
+                    pullContacts();
+                }
+            }
+
+            auto cfg_chat = json_obj.value("chat").toObject();
+            if (!cfg_chat.isEmpty()) {
+                whiteList = cfg_chat.value("whitelist").toVariant().toStringList();
+                waitTime = cfg_chat.value("waittime").toInt();
+                LOG(info) << QStringLiteral("自动回复的白名单：[%1]").arg(whiteList.join(", "));
+                LOG(info) << QStringLiteral("自动回复的等待时间：%1s").arg(waitTime);
+            }
+
+            auto cfg_robot = json_obj.value("robot").toObject();
+            if (!cfg_robot.isEmpty()) {
+                if (chatRobot) {
+                    delete chatRobot;
+                }
+                chatRobot = new ChatRobot();
+                chatRobot->setModel(cfg_robot.value("model").toString());
+                chatRobot->setPrompt(cfg_robot.value("prompt").toString());
+            }
+        } else {
+            LOG(err) << QStringLiteral("错误：解析配置文件%1失败，请检查json语法").arg(configFile);
+        }
+    } else {
+        LOG(err) << QStringLiteral("错误：无法打开配置文件") + configFile;
+    }
+}
+
 void Application::initWCF()
 {
     if (isWeChatRunning()) {
@@ -93,25 +132,21 @@ void Application::initNngClient()
     reqSocket->setRecvTimeout(500);
 }
 
-void Application::initChatRobot()
+void Application::initHandler()
 {
-    LOG(info) << QStringLiteral("初始化聊天机器人：读取prompt文件内容喂给AI...");
-    chatRobot = new ChatRobot;
-    QFile config("./prompt");
-    if (config.exists() && config.open(QIODeviceBase::ReadOnly)) {
-        chatRobot->setPrompt(config.readAll());
-    }
+    waitForLogin();
+    startReceiveMessage();
+    handleTimer = new QTimer(this);
+    handleTimer->setInterval(1000);
+    handleTimer->start();
+    connect(handleTimer, &QTimer::timeout, this, &Application::onHandle);
 }
 
-void Application::initWhiteList()
+void Application::initConfigWatcher()
 {
-    LOG(info) << QStringLiteral("初始化自动回复的白名单：读取whitelist文件...");
-    // 自动回复的白名单，若不在此则不回复
-    QFile config("./whitelist");
-    if (config.exists() && config.open(QIODeviceBase::ReadOnly)) {
-        const QString content = config.readAll();
-        whiteList.append(content.split("\r\n"));
-    }
+    configWatcher = new QFileSystemWatcher(this);
+    configWatcher->addPath(configFile);
+    connect(configWatcher, &QFileSystemWatcher::fileChanged, [this](const QString&) { reloadConfig(); });
 }
 
 void Application::waitForLogin()
@@ -137,7 +172,7 @@ void Application::pullContacts()
     req.which_msg = Request_func_tag;
     auto rsp = sendRequestRaw(req);
     auto contacts = DataUtil::getContacts(rsp);
-    contactList.clear();
+    QString list;
     for (const auto& contact : contacts) {
         auto wxid = QString::fromStdString(contact.wxid);
         if (wxid.isEmpty() || wxid.startsWith("gh_")) {
@@ -145,29 +180,28 @@ void Application::pullContacts()
             continue;
         }
 
-        AppContact_t app_contact;
-        app_contact.name = QString::fromStdString(contact.remark.empty() ? contact.name : contact.remark);
+        auto name = QString::fromStdString(contact.remark.empty() ? contact.name : contact.remark);
+        if (name.isEmpty()) name = "<null>";
+        QString attr;
         if (wxid.endsWith("@chatroom")) {
-            app_contact.attr = QStringLiteral("群聊");
+            attr = QStringLiteral("群聊");
         } else {
             if (contact.gender == 1) {
-                app_contact.attr = QStringLiteral("男");
+                attr = QStringLiteral("男");
             } else if(contact.gender == 2) {
-                app_contact.attr = QStringLiteral("女");
+                attr = QStringLiteral("女");
             } else {
-                app_contact.attr = QStringLiteral("个人");
+                attr = QStringLiteral("个人");
             }
         }
-        contactList.insert(wxid, app_contact);
+        list.append(QString("%1 %2 %3\n").arg(wxid).arg(name).arg(attr));
     }
 
     // 将联系人清单写入文件，方便后续操作
     QFile file("./contacts");
     if (file.open(QIODeviceBase::WriteOnly)) {
         file.resize(0);
-        for (auto i = contactList.cbegin(), end = contactList.cend(); i != end; ++i) {
-            file.write(QString("%1 %2\n").arg(i.key()).arg(i.value().name).toUtf8());
-        }
+        file.write(list.toUtf8());
     }
 }
 
@@ -234,7 +268,7 @@ void Application::onHandle()
         const auto& wxid = i.key();
         const auto& app_msg = i.value();
         // 超过特定时间没有新消息就开始让机器人回复
-        if (QDateTime::currentSecsSinceEpoch() - app_msg.timestamp > 3) {
+        if (QDateTime::currentSecsSinceEpoch() - app_msg.timestamp > waitTime) {
             QString content = app_msg.conent.join("。\n");
             auto reply = chatRobot->talk(wxid, content);
             if (whiteList.contains(wxid)) {
