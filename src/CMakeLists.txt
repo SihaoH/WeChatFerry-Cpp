@@ -11,6 +11,8 @@ set(SOURCES
     main.cpp
     Application.h
     Application.cpp
+    Client.h
+    Client.cpp
     ChatRobot.h
     ChatRobot.cpp
     DataUtil.h

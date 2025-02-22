@@ -1,17 +1,18 @@
 #pragma once
-#include "DataUtil.h"
+#include "Client.h"
 #include <QMutex>
 #include <QCoreApplication>
-
-struct AppMessage_t
-{
-    QStringList conent;
-    qint64 timestamp;
-};
 
 class Application : public QCoreApplication
 {
     Q_OBJECT
+
+public:
+    struct MessageSection {
+        QList<Client::Message> list;
+        qint64 timestamp;
+    };
+
 public:
     Application(int& argc, char** argv);
     ~Application();
@@ -22,11 +23,9 @@ public:
     void pullContacts();
 
 private:
-    QByteArray sendRequestRaw(const Request& req);
-    QSharedPointer<Response> sendRequest(const Request& req);
     void reloadConfig(bool is_first = false);
     void initWCF();
-    void initNngClient();
+    void initClient();
     void initHandler();
     void initConfigWatcher();
     bool isWeChatRunning();
@@ -36,16 +35,16 @@ private slots:
     void onHandle();
 
 private:
+    const QString configFile = "./config.json";
     int nngPort = 16888;
-    int isReceiving = false;
     int waitTime = 0;
+    bool isReceiving = false;
+    bool autoDelImg = false;
+    class Client* client = nullptr;
     class QTimer* handleTimer = nullptr;
-    class NngSocket* reqSocket = nullptr;
-    class NngSocket* msgSocket = nullptr;
     class ChatRobot* chatRobot = nullptr;
     class QFileSystemWatcher * configWatcher = nullptr;
     QList<QString> whiteList;
-    QMap<QString, AppMessage_t> msgList;
+    QMap<QString, MessageSection> msgMap;
     QMutex mutex;
-    const QString configFile = "./config.json";
 };

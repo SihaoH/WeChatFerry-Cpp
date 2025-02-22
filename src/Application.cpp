@@ -1,7 +1,6 @@
 ﻿#include "Application.h"
 #include "Logger.h"
 #include "sdk.h"
-#include "NngSocket.h"
 #include "ChatRoBot.h"
 #include <QTimer>
 #include <QProcess>
@@ -14,7 +13,6 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
-constexpr const char* NNG_HOST = "tcp://127.0.0.1";
 
 Application::Application(int& argc, char** argv)
     : QCoreApplication(argc, argv)
@@ -30,8 +28,7 @@ Application::~Application()
 {
     stopReceiveMessage();
     delete chatRobot;
-    delete reqSocket;
-    delete msgSocket;
+    delete client;
 }
 
 bool Application::isWeChatRunning()
@@ -48,17 +45,6 @@ bool Application::isWeChatRunning()
     return output.contains("WeChat.exe", Qt::CaseInsensitive);
 }
 
-QByteArray Application::sendRequestRaw(const Request& req)
-{
-    reqSocket->send(DataUtil::encode(req));
-    return reqSocket->waitForRecv();
-}
-
-QSharedPointer<Response> Application::sendRequest(const Request& req)
-{
-    return DataUtil::toResponse(sendRequestRaw(req));
-}
-
 void Application::reloadConfig(bool is_first)
 {
     QFile file(configFile);
@@ -71,21 +57,23 @@ void Application::reloadConfig(bool is_first)
             auto cfg_app = json_obj.value("app").toObject();
             if (!cfg_app.isEmpty()) {
                 if (is_first) {
+                    // 端口只有初次打开时可以设置
                     nngPort = cfg_app.value("port").toInt();
                     initWCF();
-                    initNngClient();
+                    initClient();
                 }
                 if (cfg_app.value("pullcontacts").toBool()) {
                     pullContacts();
                 }
+                autoDelImg = cfg_app.value("autodelimg").toBool();
             }
 
             auto cfg_chat = json_obj.value("chat").toObject();
             if (!cfg_chat.isEmpty()) {
                 whiteList = cfg_chat.value("whitelist").toVariant().toStringList();
                 waitTime = cfg_chat.value("waittime").toInt();
-                LOG(info) << QStringLiteral("自动回复的白名单：[%1]").arg(whiteList.join(", "));
-                LOG(info) << QStringLiteral("自动回复的等待时间：%1s").arg(waitTime);
+                LOG(info) << QString("自动回复的白名单：[%1]").arg(whiteList.join(", "));
+                LOG(info) << QString("自动回复的等待时间：%1s").arg(waitTime);
             }
 
             auto cfg_robot = json_obj.value("robot").toObject();
@@ -98,20 +86,20 @@ void Application::reloadConfig(bool is_first)
                 chatRobot->setPrompt(cfg_robot.value("prompt").toString());
             }
         } else {
-            LOG(err) << QStringLiteral("错误：解析配置文件%1失败，请检查json语法").arg(configFile);
+            LOG(err) << QString("错误：解析配置文件%1失败，请检查json语法").arg(configFile);
         }
     } else {
-        LOG(err) << QStringLiteral("错误：无法打开配置文件") + configFile;
+        LOG(err) << QString("错误：无法打开配置文件") + configFile;
     }
 }
 
 void Application::initWCF()
 {
     if (isWeChatRunning()) {
-        LOG(info) << QStringLiteral("初始化WCF：微信正在运行，跳过注入步骤！");
+        LOG(info) << "初始化WCF：微信正在运行，跳过注入步骤！";
 
     } else {
-        LOG(info) << QStringLiteral("初始化WCF：微信没有运行，启动微信并注入...");
+        LOG(info) << "初始化WCF：微信没有运行，启动微信并注入...";
         int ret = 0;
     #if _DEBUG
         ret = WxInitSDK(true, nngPort);
@@ -122,14 +110,9 @@ void Application::initWCF()
     }
 }
 
-void Application::initNngClient()
+void Application::initClient()
 {
-    LOG(info) << QStringLiteral("初始化NNG：连接NNG服务端...");
-    reqSocket = new NngSocket();
-    msgSocket = new NngSocket();
-    reqSocket->connectToHost(NNG_HOST, nngPort);
-    reqSocket->setSendTimeout(5000);
-    reqSocket->setRecvTimeout(500);
+    client = new Client(this, nngPort);
 }
 
 void Application::initHandler()
@@ -151,57 +134,24 @@ void Application::initConfigWatcher()
 
 void Application::waitForLogin()
 {
-    LOG(info) << QStringLiteral("等待/确认用户登录...");
-    Request req = Request_init_default;
-    req.func = Functions_FUNC_IS_LOGIN;
-    req.which_msg = Response_status_tag;
-    for (;;) {
-        auto rsp = sendRequest(req);
-        if ((*rsp).msg.status > 0) {
-            break;
-        }
+    LOG(info) << "等待/确认用户登录...";
+    while (!client->isLogin()) {
         QThread::sleep(1);
     }
 }
 
 void Application::pullContacts()
 {
-    LOG(info) << QStringLiteral("拉取联系人清单...");
-    Request req = Request_init_default;
-    req.func = Functions_FUNC_GET_CONTACTS;
-    req.which_msg = Request_func_tag;
-    auto rsp = sendRequestRaw(req);
-    auto contacts = DataUtil::getContacts(rsp);
-    QString list;
-    for (const auto& contact : contacts) {
-        auto wxid = QString::fromStdString(contact.wxid);
-        if (wxid.isEmpty() || wxid.startsWith("gh_")) {
-            // 公众号不处理
-            continue;
-        }
-
-        auto name = QString::fromStdString(contact.remark.empty() ? contact.name : contact.remark);
-        if (name.isEmpty()) name = "<null>";
-        QString attr;
-        if (wxid.endsWith("@chatroom")) {
-            attr = QStringLiteral("群聊");
-        } else {
-            if (contact.gender == 1) {
-                attr = QStringLiteral("男");
-            } else if(contact.gender == 2) {
-                attr = QStringLiteral("女");
-            } else {
-                attr = QStringLiteral("个人");
-            }
-        }
-        list.append(QString("%1 %2 %3\n").arg(wxid).arg(name).arg(attr));
-    }
+    LOG(info) << "拉取联系人清单...";
+    auto list = client->getContacts();
 
     // 将联系人清单写入文件，方便后续操作
     QFile file("./contacts");
     if (file.open(QIODeviceBase::WriteOnly)) {
         file.resize(0);
-        file.write(list.toUtf8());
+        for (const auto& contact : list) {
+            file.write(QString("%1 %2 %3").arg(contact.wxid).arg(contact.name).arg(contact.attr).toUtf8());
+        }
     }
 }
 
@@ -209,12 +159,8 @@ void Application::startReceiveMessage()
 {
     if (isReceiving) return;
 
-    LOG(info) << QStringLiteral("开始接收微信消息...");
-    Request req = Request_init_default;
-    req.func = Functions_FUNC_ENABLE_RECV_TXT;
-    req.which_msg = Request_func_tag;
-    sendRequest(req);
-    msgSocket->connectToHost(NNG_HOST, nngPort + 1);
+    LOG(info) << "开始接收微信消息...";
+    client->setReceiveMessage(true);
 
     isReceiving = true;
     QtConcurrent::run([this]() {
@@ -224,69 +170,59 @@ void Application::startReceiveMessage()
 
 void Application::stopReceiveMessage()
 {
-    LOG(info) << QStringLiteral("停止接收微信消息");
+    LOG(info) << "停止接收微信消息";
     isReceiving = false;
-
-    Request req = Request_init_default;
-    req.func = Functions_FUNC_DISABLE_RECV_TXT;
-    req.which_msg = Request_func_tag;
-    sendRequest(req);
+    client->setReceiveMessage(false);
 }
 
 void Application::asyncReceiving()
 {
     while (isReceiving) {
-        // 获取wx接收的信息
-        auto rsp = DataUtil::toResponse(msgSocket->waitForRecv());
-        auto wxmsg = (*rsp).msg.wxmsg;
-        auto content = QString(wxmsg.content);
-        if (content.startsWith("<msg>") || content.startsWith("<?xml version=\"1.0\"?>")) {
-            // 特殊消息，先不处理
-            continue;
-        }
-
-        QString wxid;
-        if (wxmsg.is_group) {
-            if (wxmsg.is_self) {
-                // 如果是群聊里面自己说的就不管
-                continue;
-            }
-            wxid = QString(wxmsg.roomid);
-        } else {
-            wxid = QString(wxmsg.sender);
-        }
+        auto msg = client->receiveMessage();
 
         QMutexLocker locker(&mutex);
-        msgList[wxid].conent.append(content);
-        msgList[wxid].timestamp = QDateTime::currentSecsSinceEpoch();
+        msgMap[msg.sender].list.append(msg);
+        msgMap[msg.sender].timestamp = QDateTime::currentSecsSinceEpoch();
     }
 }
 
 void Application::onHandle()
 {
-    for (auto i = msgList.cbegin(), end = msgList.cend(); i != end; ++i) {
+    QString rm_wxid;
+    for (auto i = msgMap.cbegin(), end = msgMap.cend(); i != end; ++i) {
         const auto& wxid = i.key();
-        const auto& app_msg = i.value();
+        const auto& section = i.value();
         // 超过特定时间没有新消息就开始让机器人回复
-        if (QDateTime::currentSecsSinceEpoch() - app_msg.timestamp > waitTime) {
-            QString content = app_msg.conent.join("\n");
+        if (QDateTime::currentSecsSinceEpoch() - section.timestamp > waitTime) {
+            QString texts;
+            QStringList images;
+            for (const auto& msg : section.list) {
+                if (msg.type == MsgType::Text) {
+                    texts.append(msg.content + "\n");
+                } else if (msg.type == MsgType::Image) {
+                    images.append(msg.content);
+                }
+            }
             if (whiteList.contains(wxid)) {
-                auto reply = chatRobot->talk(wxid, content);
-                Request req = Request_init_default;
-                req.func = Functions_FUNC_SEND_TXT;
-                req.which_msg = Request_txt_tag;
-                QByteArray receiver = wxid.toUtf8();
-                QByteArray msg = reply.toUtf8();
-                req.msg.txt.receiver = (char*)receiver.constData();
-                req.msg.txt.msg = (char*)msg.constData();
-                sendRequest(req);
+                auto reply = chatRobot->talk(wxid, texts, images);
+                client->sendText(wxid, reply);
             } else {
-                LOG(debug) << wxid << ": " << content;
+                LOG(debug) << wxid << ": " << texts;
             }
 
-            QMutexLocker locker(&mutex);
-            msgList.remove(wxid);
-            return; //处理完马上退出，因为修改了msgList本身
+            if (autoDelImg) { // 自动删除保存的图片
+                for (const auto& img : images) {
+                    QFile::remove(img);
+                }
+            }
+
+            rm_wxid = wxid;
+            break; // 一次只处理一条消息
         }
+    }
+
+    if (!rm_wxid.isEmpty()) {
+        QMutexLocker locker(&mutex);
+        msgMap.remove(rm_wxid);
     }
 }
