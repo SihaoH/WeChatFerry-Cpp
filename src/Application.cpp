@@ -5,7 +5,7 @@
 #include <QTimer>
 #include <QProcess>
 #include <QFile>
-#include <QtConcurrent>
+#include <QThreadPool>
 #include <QFileSystemWatcher>
 
 #include <QJsonDocument>
@@ -163,7 +163,7 @@ void Application::startReceiveMessage()
     client->setReceiveMessage(true);
 
     isReceiving = true;
-    QtConcurrent::run([this]() {
+    QThreadPool::globalInstance()->start([this]() {
         asyncReceiving();
     });
 }

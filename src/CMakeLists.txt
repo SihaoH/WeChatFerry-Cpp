@@ -2,7 +2,7 @@ set(TARGET app)
 
 find_package(fmt REQUIRED)
 find_package(nng REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Core Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Core)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__FILENAME__='"$(notdir $<)'"")
@@ -32,9 +32,8 @@ target_link_libraries(${TARGET}
     fmt::fmt
     nng::nng
     Qt6::Core
-    Qt6::Concurrent
 )
-target_compile_options(${TARGET} PRIVATE "/utf-8" "/MT$<$<CONFIG:Debug>:d>")
+target_compile_options(${TARGET} PRIVATE "/utf-8" "/MD$<$<CONFIG:Debug>:d>")
 target_compile_definitions(${TARGET} PRIVATE "_UNICODE")
 
 # 修改从VS启动时的工作目录路径

@@ -34,4 +34,4 @@ target_include_directories(${TARGET}
     ${SMC_DIR}/SILK_SDK_SRC_FLP_v1.0.9/interface
 )
 
-target_compile_options(${TARGET} PRIVATE "/permissive-" "/MT$<$<CONFIG:Debug>:d>")
+target_compile_options(${TARGET} PRIVATE "/permissive-" "/MD$<$<CONFIG:Debug>:d>")

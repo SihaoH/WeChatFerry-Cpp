@@ -56,7 +56,7 @@ target_include_directories(${TARGET}
     PRIVATE 
     ${WCF_DIR}/spy
 )
-target_compile_options(${TARGET} PRIVATE "/permissive-" "/EHa" "/utf-8" "/MT$<$<CONFIG:Debug>:d>")
+target_compile_options(${TARGET} PRIVATE "/permissive-" "/EHa" "/utf-8" "/MD$<$<CONFIG:Debug>:d>")
 target_compile_definitions(${TARGET} PRIVATE "WIN32;WSPY_EXPORTS;_WINDOWS;_USRDLL;_UNICODE")
 target_link_options(${TARGET} PRIVATE "/SUBSYSTEM:WINDOWS")
 

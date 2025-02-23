@@ -29,7 +29,7 @@ target_include_directories(${TARGET}
     ${WCF_DIR}/rpc/proto
     ${VCPKG_INCLUDE_DIR}
 )
-target_compile_options(${TARGET} PRIVATE "/permissive-" "/EHa" "/utf-8" "/MT$<$<CONFIG:Debug>:d>")
+target_compile_options(${TARGET} PRIVATE "/permissive-" "/EHa" "/utf-8" "/MD$<$<CONFIG:Debug>:d>")
 
 add_custom_command(
     TARGET ${TARGET} PRE_BUILD

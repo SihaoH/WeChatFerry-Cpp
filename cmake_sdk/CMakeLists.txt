@@ -32,6 +32,6 @@ target_include_directories(${TARGET}
     ${WCF_DIR}/com
     ${VCPKG_INCLUDE_DIR}
 )
-target_compile_options(${TARGET} PRIVATE "/permissive-" "/EHa" "/utf-8" "/MT$<$<CONFIG:Debug>:d>")
+target_compile_options(${TARGET} PRIVATE "/permissive-" "/EHa" "/utf-8" "/MD$<$<CONFIG:Debug>:d>")
 target_compile_definitions(${TARGET} PRIVATE "WIN32;NDEBUG;SDK_EXPORTS;_WINDOWS;_USRDLL;_UNICODE")
 target_link_options(${TARGET} PRIVATE "/SUBSYSTEM:WINDOWS")
