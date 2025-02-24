@@ -1,6 +1,8 @@
 ﻿#pragma once
 #include "DataUtil.h"
 #include <QObject>
+#include <QMap>
+#include <QVariant>
 
 class MsgType
 {
@@ -12,6 +14,7 @@ public:
         Image = 0x03,
         Audio = 0x22,
         Video = 0x2B,
+        Quote = 0x31000031, //引用
         Other = 0xFFFFFFFF //暂未实现处理的类型
     };
 };
@@ -32,6 +35,14 @@ public:
         QString name;
         QString attr; // 群聊/男/女/个人
     };
+    struct Options
+    {
+        bool needGroup = true;
+        bool onlyAter = true;
+        bool needImage = true;
+        bool downloadVideo = true;
+    };
+    using SqlResult = QList<QMap<QString, QVariant>>;
 
 public:
     Client(QObject* parent, int port);
@@ -45,18 +56,28 @@ public:
 
     bool isLogin();
     Contact getSelfInfo();
-    QList<Contact> getContacts();
+    QList<Contact> getFriendList();
 
     void setReceiveMessage(bool enabled);
-    Message receiveMessage();
+    Message receiveMessage(Options opt = Options());
 
 private:
     QByteArray sendRequestRaw(const Request& req);
     QSharedPointer<Response> sendRequest(const Request& req);
+    SqlResult querySQL(const QString& db, const QString& sql);
+
+    void pullSelfInfo();
+    void pullContacts();
+    void pullGroupMembers(const QString& wxid);
 
 private:
     const int dlTimes = 10;
     int nngPort;
     class NngSocket* reqSocket = nullptr;
     class NngSocket* msgSocket = nullptr;
+
+    Contact selfInfo;
+    QMap<QString, Contact> friendMap;
+    QMap<QString, QString> contactMap;
+    QMap<QString, QMap<QString, QString>> GroupMemberMap;
 };
