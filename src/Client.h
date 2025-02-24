@@ -14,7 +14,7 @@ public:
         Image = 0x03,
         Audio = 0x22,
         Video = 0x2B,
-        Quote = 0x31000031, //引用
+        Refer = 0x31, //引用
         Other = 0xFFFFFFFF //暂未实现处理的类型
     };
 };

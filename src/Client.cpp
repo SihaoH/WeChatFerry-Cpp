@@ -3,6 +3,7 @@
 #include "NngSocket.h"
 #include "DataUtil.h"
 #include <QThread>
+#include <QRegularExpression>
 
 constexpr const char* NNG_HOST = "tcp://127.0.0.1";
 
@@ -246,77 +247,103 @@ Client::Message Client::receiveMessage(Client::Options opt)
 {
     // 获取wx接收的信息
     Message msg;
-    auto rsp = DataUtil::toResponse(msgSocket->waitForRecv());
-    auto wxmsg = rsp->msg.wxmsg;
-    if (wxmsg.is_group) {
-        if (GroupMemberMap.contains(wxmsg.roomid)) {
-            if (!GroupMemberMap[wxmsg.roomid].contains(wxmsg.sender)) {
-                // 已有的群成员里没有此人信息，可能是新加入的，需要更新群信息
-                pullGroupMembers(wxmsg.roomid, true);
+    bool has_useful = false;
+    while (has_useful == false) {
+        msg = Message();
+        auto rsp = DataUtil::toResponse(msgSocket->waitForRecv());
+        auto wxmsg = rsp->msg.wxmsg;
+        if (wxmsg.is_group) {
+            if (opt.needGroup) {
+                if (GroupMemberMap.contains(wxmsg.roomid)) {
+                if (!GroupMemberMap[wxmsg.roomid].contains(wxmsg.sender)) {
+                    // 已有的群成员里没有此人信息，可能是新加入的，需要更新群信息
+                    pullGroupMembers(wxmsg.roomid, true);
+                }
+                } else {
+                    pullGroupMembers(wxmsg.roomid);
+                }
+                msg.sender = QString(wxmsg.roomid);
+                msg.content.append(GroupMemberMap[wxmsg.roomid][wxmsg.sender] + ": ");
             }
         } else {
-            pullGroupMembers(wxmsg.roomid);
+            msg.sender = QString(wxmsg.sender);
         }
-        msg.sender = QString(wxmsg.roomid);
-        msg.content.append(GroupMemberMap[wxmsg.roomid][wxmsg.sender] + ": ");
-    } else {
-        msg.sender = QString(wxmsg.sender);
-    }
 
-    switch (wxmsg.type) {
-    case MsgType::Text: {
-        msg.type = MsgType::Text;
-        msg.content.append(wxmsg.content);
-        break;
-    }
-    case MsgType::Image: {
-        msg.type = MsgType::Image;
-        Request req = Request_init_default;
-        req.func = Functions_FUNC_DOWNLOAD_ATTACH;
-        req.which_msg = Request_att_tag;
-        req.msg.att.id = wxmsg.id;
-        req.msg.att.extra = wxmsg.extra;
-        if (sendRequest(req)->msg.status != 0) {
-            LOG(err) << "下载图片失败！";
-        }
-        req = Request_init_default;
-        req.func = Functions_FUNC_DECRYPT_IMAGE;
-        req.which_msg = Request_dec_tag;
-        req.msg.dec.src = wxmsg.extra;
-        req.msg.dec.dst = (char*)".//images/"; // 这里要双斜杠，不然创建的文件夹名称会缺少首字母i
-        int times = 0;
-        QString img_file;
-        while (img_file.isEmpty()) {
-            if (times += 1 > dlTimes) {
-                LOG(err) << "解密图片失败！";
-                break;
+        switch (wxmsg.type) {
+        case MsgType::Text: {
+            msg.type = MsgType::Text;
+            msg.content.append(wxmsg.content);
+            if (opt.needGroup && opt.onlyAter && QString(wxmsg.xml).contains("<atuserlist>")) {
+                has_useful = QString(wxmsg.xml).contains(selfInfo.wxid);
             }
-            auto rsp = sendRequest(req);
-            img_file = QString(rsp->msg.str);
-            QThread::sleep(1);
+            break;
         }
-        msg.content.append(img_file);
-        break;
-    }
-    case MsgType::Video: {
-        msg.type = MsgType::Video;
-        Request req = Request_init_default;
-        req.func = Functions_FUNC_DOWNLOAD_ATTACH;
-        req.which_msg = Request_att_tag;
-        req.msg.att.id = wxmsg.id;
-        req.msg.att.thumb = wxmsg.thumb;
-        if (sendRequest(req)->msg.status == 0) {
-            QString video_file = wxmsg.thumb;
-            video_file.replace(".jpg", ".mp4");
-            msg.content.append(video_file);
-        } else {
-            LOG(err) << "下载视频失败！";
+        case MsgType::Refer: {
+            QString content = wxmsg.content;
+            content = content.section(QRegularExpression("<title>|</title>", QRegularExpression::DotMatchesEverythingOption), 1, 1);
+            msg.type = MsgType::Text; // 先当做纯文本处理
+            msg.content.append(content);
+            if (opt.needGroup && opt.onlyAter && QString(wxmsg.xml).contains("<atuserlist>")) {
+                has_useful = QString(wxmsg.xml).contains(selfInfo.wxid);
+            }
+            break;
         }
-        break;
+        case MsgType::Image: {
+            if (opt.needImage) {
+                msg.type = MsgType::Image;
+                Request req = Request_init_default;
+                req.func = Functions_FUNC_DOWNLOAD_ATTACH;
+                req.which_msg = Request_att_tag;
+                req.msg.att.id = wxmsg.id;
+                req.msg.att.extra = wxmsg.extra;
+                if (sendRequest(req)->msg.status != 0) {
+                    LOG(err) << "下载图片失败！";
+                }
+                req = Request_init_default;
+                req.func = Functions_FUNC_DECRYPT_IMAGE;
+                req.which_msg = Request_dec_tag;
+                req.msg.dec.src = wxmsg.extra;
+                req.msg.dec.dst = (char*)".//images/"; // 这里要双斜杠，不然创建的文件夹名称会缺少首字母i
+                int times = 0;
+                QString img_file;
+                while (img_file.isEmpty()) {
+                    if (times += 1 > dlTimes) {
+                        LOG(err) << "解密图片失败！";
+                        break;
+                    }
+                    auto rsp = sendRequest(req);
+                    img_file = QString(rsp->msg.str);
+                    QThread::sleep(1);
+                }
+                msg.content.append(img_file);
+                has_useful = !img_file.isEmpty();
+            }
+            break;
+        }
+        case MsgType::Video: {
+            if (opt.downloadVideo) {
+                msg.type = MsgType::Video;
+                Request req = Request_init_default;
+                req.func = Functions_FUNC_DOWNLOAD_ATTACH;
+                req.which_msg = Request_att_tag;
+                req.msg.att.id = wxmsg.id;
+                req.msg.att.thumb = wxmsg.thumb;
+                if (sendRequest(req)->msg.status == 0) {
+                    QString video_file = wxmsg.thumb;
+                    video_file.replace(".jpg", ".mp4");
+                    msg.content.append(video_file);
+                    has_useful = true;
+                } else {
+                    LOG(err) << "下载视频失败！";
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
     }
-    default:
-        break;
-    }
+    
     return msg;
 }
 

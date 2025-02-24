@@ -20,7 +20,7 @@ public:
     void startReceiveMessage();
     void stopReceiveMessage();
     void waitForLogin();
-    void pullContacts();
+    void dumpFriendList();
 
 private:
     void reloadConfig(bool is_first = false);

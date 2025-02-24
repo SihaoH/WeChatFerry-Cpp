@@ -62,8 +62,8 @@ void Application::reloadConfig(bool is_first)
                     initWCF();
                     initClient();
                 }
-                if (cfg_app.value("pullcontacts").toBool()) {
-                    pullContacts();
+                if (cfg_app.value("dumpfriends").toBool()) {
+                    dumpFriendList();
                 }
                 autoDelImg = cfg_app.value("autodelimg").toBool();
             }
@@ -81,6 +81,7 @@ void Application::reloadConfig(bool is_first)
                 if (chatRobot) {
                     delete chatRobot;
                 }
+                LOG(info) << "初始化聊天机器人：设置模型及投喂初始提示语...";
                 chatRobot = new ChatRobot();
                 chatRobot->setModel(cfg_robot.value("model").toString());
                 chatRobot->setPrompt(cfg_robot.value("prompt").toString());
@@ -140,13 +141,13 @@ void Application::waitForLogin()
     }
 }
 
-void Application::pullContacts()
+void Application::dumpFriendList()
 {
     LOG(info) << "拉取联系人清单...";
-    auto list = client->getContacts();
+    auto list = client->getFriendList();
 
-    // 将联系人清单写入文件，方便后续操作
-    QFile file("./contacts");
+    // 将好友列表存文件
+    QFile file("./friends.txt");
     if (file.open(QIODeviceBase::WriteOnly)) {
         file.resize(0);
         for (const auto& contact : list) {
@@ -200,7 +201,7 @@ void Application::onHandle()
                 if (msg.type == MsgType::Text) {
                     texts.append(msg.content + "\n");
                 } else if (msg.type == MsgType::Image) {
-                    images.append(msg.content);
+                    images.append(msg.content.mid(msg.content.indexOf(": ")+1).trimmed());
                 }
             }
             if (whiteList.contains(wxid)) {
