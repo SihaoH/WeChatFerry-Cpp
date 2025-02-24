@@ -160,12 +160,13 @@ void Client::pullGroupMembers(const QString& wxid, bool refresh)
         if (bs[i + 2] == 10) {
             id_size = bs[i + 3];
         }
-        if (bs[id_size + 1] == 18) {
-            name_size = bs[id_size + 2];
+        int name_offset = i + 3 + id_size;
+        if (bs[name_offset + 1] == 18) {
+            name_size = bs[name_offset + 2];
         }
         QString wxid = QByteArray(bs.constData() + i + 4, id_size);
         if (name_size > 0) {
-            group_info[wxid] = QByteArray(bs.constData() + i + id_size + 2, name_size);
+            group_info[wxid] = QByteArray(bs.constData() + name_offset + 3, name_size);
         } else {
             group_info[wxid] = contactMap[wxid];
         }
@@ -265,7 +266,7 @@ Client::Message Client::receiveMessage(Client::Options opt)
     switch (wxmsg.type) {
     case MsgType::Text: {
         msg.type = MsgType::Text;
-        msg.content = QString(wxmsg.content);
+        msg.content.append(wxmsg.content);
         break;
     }
     case MsgType::Image: {
@@ -284,15 +285,17 @@ Client::Message Client::receiveMessage(Client::Options opt)
         req.msg.dec.src = wxmsg.extra;
         req.msg.dec.dst = (char*)".//images/"; // 这里要双斜杠，不然创建的文件夹名称会缺少首字母i
         int times = 0;
-        while (msg.content.isEmpty()) {
+        QString img_file;
+        while (img_file.isEmpty()) {
             if (times += 1 > dlTimes) {
                 LOG(err) << "解密图片失败！";
                 break;
             }
             auto rsp = sendRequest(req);
-            msg.content = QString(rsp->msg.str);
+            img_file = QString(rsp->msg.str);
             QThread::sleep(1);
         }
+        msg.content.append(img_file);
         break;
     }
     case MsgType::Video: {
@@ -303,8 +306,9 @@ Client::Message Client::receiveMessage(Client::Options opt)
         req.msg.att.id = wxmsg.id;
         req.msg.att.thumb = wxmsg.thumb;
         if (sendRequest(req)->msg.status == 0) {
-            msg.content = (wxmsg.thumb);
-            msg.content.replace(".jpg", ".mp4");
+            QString video_file = wxmsg.thumb;
+            video_file.replace(".jpg", ".mp4");
+            msg.content.append(video_file);
         } else {
             LOG(err) << "下载视频失败！";
         }

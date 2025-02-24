@@ -68,7 +68,7 @@ private:
 
     void pullSelfInfo();
     void pullContacts();
-    void pullGroupMembers(const QString& wxid);
+    void pullGroupMembers(const QString& wxid, bool refresh = false);
 
 private:
     const int dlTimes = 10;
