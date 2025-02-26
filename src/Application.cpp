@@ -70,9 +70,9 @@ void Application::reloadConfig(bool is_first)
 
             auto cfg_chat = json_obj.value("chat").toObject();
             if (!cfg_chat.isEmpty()) {
-                whiteList = cfg_chat.value("whitelist").toVariant().toStringList();
+                autoReply = cfg_chat.value("autoreply").toVariant().toStringList();
                 waitTime = cfg_chat.value("waittime").toInt();
-                LOG(info) << QString("自动回复的白名单：[%1]").arg(whiteList.join(", "));
+                LOG(info) << QString("自动回复的白名单：[%1]").arg(autoReply.join(", "));
                 LOG(info) << QString("自动回复的等待时间：%1s").arg(waitTime);
             }
 
@@ -179,7 +179,9 @@ void Application::stopReceiveMessage()
 void Application::asyncReceiving()
 {
     while (isReceiving) {
-        auto msg = client->receiveMessage();
+        Client::Options opt;
+        opt.types = { MsgType::Text, MsgType::Image, MsgType::Audio, MsgType::Video, MsgType::Refer };
+        auto msg = client->receiveMessage(opt);
 
         QMutexLocker locker(&mutex);
         msgMap[msg.sender].list.append(msg);
@@ -189,41 +191,34 @@ void Application::asyncReceiving()
 
 void Application::onHandle()
 {
-    QString rm_wxid;
     for (auto i = msgMap.cbegin(), end = msgMap.cend(); i != end; ++i) {
         const auto& wxid = i.key();
         const auto& section = i.value();
-        // 超过特定时间没有新消息就开始让机器人回复
+        // 超过特定时间没有新消息才集中处理
         if (QDateTime::currentSecsSinceEpoch() - section.timestamp > waitTime) {
-            QString texts;
-            QStringList images;
-            for (const auto& msg : section.list) {
-                if (msg.type == MsgType::Text) {
-                    texts.append(msg.content + "\n");
-                } else if (msg.type == MsgType::Image) {
-                    images.append(msg.content.mid(msg.content.indexOf(": ")+1).trimmed());
+            if (autoReply.contains(wxid)) {
+                QString texts;
+                for (const auto& msg : section.list) {
+                    if (msg.type == MsgType::Text) {
+                        texts.append(msg.content + "\n");
+                    }
                 }
-            }
-            if (whiteList.contains(wxid)) {
-                auto reply = chatRobot->talk(wxid, texts, images);
+                auto reply = chatRobot->talk(wxid, texts);
                 client->sendText(wxid, reply);
+                //client->sendText(wxid, "@{wxid_i584qm1ofvdu22}哈哈哈哈");
+                //client->sendPatPat(wxid, "wxid_i584qm1ofvdu22");
+                //client->inviteRoomMembers(wxid, "wxid_i584qm1ofvdu22");
             } else {
-                LOG(debug) << wxid << ": " << texts;
-            }
-
-            if (autoDelImg) { // 自动删除保存的图片
-                for (const auto& img : images) {
-                    QFile::remove(img);
+                QString texts;
+                for (const auto& msg : section.list) {
+                    texts.append(msg.content + "\n");
                 }
+                LOG(debug) << "\n" << wxid << ": \n" << texts;
             }
 
-            rm_wxid = wxid;
+            QMutexLocker locker(&mutex);
+            msgMap.remove(wxid);
             break; // 一次只处理一条消息
         }
-    }
-
-    if (!rm_wxid.isEmpty()) {
-        QMutexLocker locker(&mutex);
-        msgMap.remove(rm_wxid);
     }
 }

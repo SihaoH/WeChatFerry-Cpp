@@ -44,7 +44,7 @@ private:
     class QTimer* handleTimer = nullptr;
     class ChatRobot* chatRobot = nullptr;
     class QFileSystemWatcher * configWatcher = nullptr;
-    QList<QString> whiteList;
+    QList<QString> autoReply;
     QMap<QString, MessageSection> msgMap;
     QMutex mutex;
 };

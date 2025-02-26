@@ -5,7 +5,7 @@
     "autodelimg": false
   },
   "chat": {
-    "whitelist": [ "46135998010@chatroom", "18375038478@chatroom" ],
+    "autoreply": [ "46135998010@chatroom", "18375038478@chatroom" ],
     "waittime": 5
   },
   "robot": {
