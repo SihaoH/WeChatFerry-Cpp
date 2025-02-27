@@ -39,12 +39,32 @@ private:
     int nngPort = 16888;
     int waitTime = 0;
     bool isReceiving = false;
-    bool autoDelImg = false;
+    bool isAutoReplying = false;
     class Client* client = nullptr;
     class QTimer* handleTimer = nullptr;
     class ChatRobot* chatRobot = nullptr;
     class QFileSystemWatcher * configWatcher = nullptr;
-    QList<QString> autoReply;
     QMap<QString, MessageSection> msgMap;
     QMutex mutex;
+    
+    // 聊天相关配置
+    struct ChatConfig {
+        QList<QString> autoReply;  // 自动回复的群列表
+        bool onlyAter = false;  // 是否只在被@时回复
+    } chatConfig;
+    
+    // 邀请相关配置
+    struct InviteConfig {
+        QString keyword;
+        QString reply;
+        QString roomId;
+    } inviteConfig;
+
+    // 管理员相关配置
+    struct AdminConfig {
+        QString wxid;
+        QString startCmd;
+        QString stopCmd;
+        QString quitCmd;
+    } adminConfig;
 };

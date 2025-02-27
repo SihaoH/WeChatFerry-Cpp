@@ -82,6 +82,7 @@ private:
 private:
     const int dlTimes = 10;
     int nngPort;
+    bool isReceiving = false;
     class NngSocket* reqSocket = nullptr;
     class NngSocket* msgSocket = nullptr;
 

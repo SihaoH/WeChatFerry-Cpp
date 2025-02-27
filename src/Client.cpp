@@ -334,6 +334,7 @@ void Client::setReceiveMessage(bool enabled)
 {
     Request req = Request_init_default;
     req.which_msg = Request_func_tag;
+    isReceiving = enabled;
     if (enabled) {
         req.func = Functions_FUNC_ENABLE_RECV_TXT;
         auto rsp = sendRequest(req);
@@ -352,7 +353,7 @@ Client::Message Client::receiveMessage(Client::Options opt)
     // 获取wx接收的信息
     Message msg;
     bool has_useful = false;
-    while (has_useful == false) {
+    while (isReceiving && has_useful == false) {
         auto rsp = DataUtil::toResponse(msgSocket->waitForRecv());
         auto wxmsg = rsp->msg.wxmsg;
 
@@ -380,6 +381,8 @@ Client::Message Client::receiveMessage(Client::Options opt)
             msg.content.append(wxmsg.content);
             if (opt.onlyAter && QString(wxmsg.xml).contains("<atuserlist>")) {
                 has_useful = QString(wxmsg.xml).contains(selfInfo.wxid);
+            } else {
+                has_useful = true;
             }
             break;
         }
@@ -391,6 +394,8 @@ Client::Message Client::receiveMessage(Client::Options opt)
             msg.content.append(content);
             if (opt.onlyAter && QString(wxmsg.xml).contains("<atuserlist>")) {
                 has_useful = QString(wxmsg.xml).contains(selfInfo.wxid);
+            } else {
+                has_useful = true;
             }
             break;
         }

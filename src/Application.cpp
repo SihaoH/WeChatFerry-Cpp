@@ -65,15 +65,15 @@ void Application::reloadConfig(bool is_first)
                 if (cfg_app.value("dumpfriends").toBool()) {
                     dumpFriendList();
                 }
-                autoDelImg = cfg_app.value("autodelimg").toBool();
+                waitTime = cfg_app.value("waittime").toInt();
             }
 
             auto cfg_chat = json_obj.value("chat").toObject();
             if (!cfg_chat.isEmpty()) {
-                autoReply = cfg_chat.value("autoreply").toVariant().toStringList();
-                waitTime = cfg_chat.value("waittime").toInt();
-                LOG(info) << QString("自动回复的白名单：[%1]").arg(autoReply.join(", "));
-                LOG(info) << QString("自动回复的等待时间：%1s").arg(waitTime);
+                chatConfig.autoReply = cfg_chat.value("autoreply").toVariant().toStringList();
+                chatConfig.onlyAter = cfg_chat.value("onlyater").toBool();
+                LOG(info) << QString("自动回复的白名单：[%1]").arg(chatConfig.autoReply.join(", "));
+                LOG(info) << QString("是否只在@时回复：%1").arg(chatConfig.onlyAter ? "是" : "否");
             }
 
             auto cfg_robot = json_obj.value("robot").toObject();
@@ -85,6 +85,27 @@ void Application::reloadConfig(bool is_first)
                 chatRobot = new ChatRobot();
                 chatRobot->setModel(cfg_robot.value("model").toString());
                 chatRobot->setPrompt(cfg_robot.value("prompt").toString());
+            }
+
+            // 读取邀请配置
+            auto cfg_invite = json_obj.value("invite").toObject();
+            if (!cfg_invite.isEmpty()) {
+                inviteConfig.keyword = cfg_invite.value("keyword").toString();
+                inviteConfig.reply = cfg_invite.value("reply").toString();
+                inviteConfig.roomId = cfg_invite.value("roomid").toString();
+                LOG(info) << QString("邀请关键词：%1").arg(inviteConfig.keyword);
+                LOG(info) << QString("邀请回复：%1").arg(inviteConfig.reply);
+                LOG(info) << QString("目标群ID：%1").arg(inviteConfig.roomId);
+            }
+
+            auto cfg_admin = json_obj.value("admin").toObject();
+            if (!cfg_admin.isEmpty()) {
+                adminConfig.wxid = cfg_admin.value("wxid").toString();
+                adminConfig.startCmd = cfg_admin.value("start").toString();
+                adminConfig.stopCmd = cfg_admin.value("stop").toString();
+                adminConfig.quitCmd = cfg_admin.value("quit").toString();
+                LOG(info) << QString("管理员ID：%1").arg(adminConfig.wxid);
+                LOG(info) << QString("管理指令：%1/%2/%3").arg(adminConfig.startCmd, adminConfig.stopCmd, adminConfig.quitCmd);
             }
         } else {
             LOG(err) << QString("错误：解析配置文件%1失败，请检查json语法").arg(configFile);
@@ -151,7 +172,7 @@ void Application::dumpFriendList()
     if (file.open(QIODeviceBase::WriteOnly)) {
         file.resize(0);
         for (const auto& contact : list) {
-            file.write(QString("%1 %2 %3").arg(contact.wxid).arg(contact.name).arg(contact.attr).toUtf8());
+            file.write(QString("%1 %2 %3\n").arg(contact.wxid).arg(contact.name).arg(contact.attr).toUtf8());
         }
     }
 }
@@ -174,6 +195,7 @@ void Application::stopReceiveMessage()
     LOG(info) << "停止接收微信消息";
     isReceiving = false;
     client->setReceiveMessage(false);
+    QThread::sleep(1);
 }
 
 void Application::asyncReceiving()
@@ -181,11 +203,13 @@ void Application::asyncReceiving()
     while (isReceiving) {
         Client::Options opt;
         opt.types = { MsgType::Text, MsgType::Image, MsgType::Audio, MsgType::Video, MsgType::Refer };
+        opt.onlyAter = chatConfig.onlyAter;
         auto msg = client->receiveMessage(opt);
 
         QMutexLocker locker(&mutex);
-        msgMap[msg.sender].list.append(msg);
-        msgMap[msg.sender].timestamp = QDateTime::currentSecsSinceEpoch();
+        QString wxid = msg.roomid.isEmpty() ? msg.sender : msg.roomid;
+        msgMap[wxid].list.append(msg);
+        msgMap[wxid].timestamp = QDateTime::currentSecsSinceEpoch();
     }
 }
 
@@ -196,24 +220,53 @@ void Application::onHandle()
         const auto& section = i.value();
         // 超过特定时间没有新消息才集中处理
         if (QDateTime::currentSecsSinceEpoch() - section.timestamp > waitTime) {
-            if (autoReply.contains(wxid)) {
-                QString texts;
-                for (const auto& msg : section.list) {
-                    if (msg.type == MsgType::Text) {
-                        texts.append(msg.content + "\n");
+            // 处理管理员命令
+            if (wxid == adminConfig.wxid) {
+                QString word = section.list.first().content;
+                if (word == adminConfig.startCmd) {
+                    isAutoReplying = true;
+                    client->sendText(wxid, "已开启自动回复");
+                } else if (word == adminConfig.stopCmd) {
+                    isAutoReplying = false;
+                    client->sendText(wxid, "已停止自动回复");
+                } else if (word == adminConfig.quitCmd) {
+                    LOG(info) << "收到退出命令，程序即将关闭...";
+                    QCoreApplication::quit();
+                }
+            } else {
+                // 检查消息列表是否包含邀请关键词
+                bool has_keyword = false;
+                if (!section.list.first().roomid.isEmpty()) {
+                    for (const auto& msg : section.list) {
+                        if (msg.content.contains(inviteConfig.keyword)) {
+                            has_keyword = true;
+                            break;
+                        }
                     }
                 }
-                auto reply = chatRobot->talk(wxid, texts);
-                client->sendText(wxid, reply);
-                //client->sendText(wxid, "@{wxid_i584qm1ofvdu22}哈哈哈哈");
-                //client->sendPatPat(wxid, "wxid_i584qm1ofvdu22");
-                //client->inviteRoomMembers(wxid, "wxid_i584qm1ofvdu22");
-            } else {
-                QString texts;
-                for (const auto& msg : section.list) {
-                    texts.append(msg.content + "\n");
+                if (has_keyword) {
+                    client->sendText(wxid, inviteConfig.reply);
+                    QThread::msleep(rand()%3000);
+                    client->inviteRoomMembers(inviteConfig.roomId, wxid);
+                } else if (isAutoReplying && chatConfig.autoReply.contains(wxid)) {
+                    QString texts;
+                    for (const auto& msg : section.list) {
+                        if (msg.type == MsgType::Text) {
+                            texts.append(QString("%1: %2\n").arg(msg.name).arg(msg.content));
+                        }
+                    }
+                    auto reply = chatRobot->talk(wxid, texts);
+                    client->sendText(wxid, reply);
+                    //client->sendText(wxid, "@{wxid_i584qm1ofvdu22}哈哈哈哈");
+                    //client->sendPatPat(wxid, "wxid_i584qm1ofvdu22");
+                    //client->inviteRoomMembers(wxid, "wxid_i584qm1ofvdu22");
+                } else {
+                    QString texts;
+                    for (const auto& msg : section.list) {
+                        texts.append(msg.content + "\n");
+                    }
+                    LOG(debug) << "\n" << wxid << ": \n" << texts;
                 }
-                LOG(debug) << "\n" << wxid << ": \n" << texts;
             }
 
             QMutexLocker locker(&mutex);

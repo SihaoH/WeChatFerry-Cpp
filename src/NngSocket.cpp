@@ -29,8 +29,6 @@ void NngSocket::disconnectFromHost()
     if (socket.id != 0) {
         CHECK(nng_socket_close(socket));
         socket = NNG_SOCKET_INITIALIZER;
-    } else {
-        LOG(warn) << QStringLiteral("NngSocket未连接！");
     }
 }
 

@@ -58,5 +58,4 @@ void Logger::init(const QString& name)
 
 Logger::~Logger()
 {
-    spdlog::default_logger()->flush();
 }
