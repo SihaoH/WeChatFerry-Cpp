@@ -372,7 +372,7 @@ Client::Message Client::receiveMessage(Client::Options opt)
                 continue;
             }
         } else {
-            msg.sender = QString(wxmsg.sender);
+            msg.sender = wxmsg.sender;
             msg.name = friendMap[msg.sender].name;
         }
 
@@ -416,12 +416,12 @@ Client::Message Client::receiveMessage(Client::Options opt)
             int times = 0;
             QString img_file;
             while (img_file.isEmpty()) {
-                if (times += 1 > dlTimes) {
+                if ((times += 1) > dlTimes) {
                     LOG(err) << "解密图片失败！";
                     break;
                 }
                 auto rsp = sendRequest(req);
-                img_file = QString(rsp->msg.str);
+                img_file = rsp->msg.str;
                 QThread::sleep(1);
             }
             msg.content.append(img_file);
@@ -441,12 +441,12 @@ Client::Message Client::receiveMessage(Client::Options opt)
             int times = 0;
             QString audio_file;
             while (audio_file.isEmpty()) {
-                if (times += 1 > dlTimes) {
+                if ((times += 1) > dlTimes) {
                     LOG(err) << "获取语音数据失败！";
                     break;
                 }
                 auto rsp = sendRequest(req);
-                audio_file = QString(rsp->msg.str);
+                audio_file = rsp->msg.str;
                 QThread::sleep(1);
             }
             msg.content.append(audio_file);
