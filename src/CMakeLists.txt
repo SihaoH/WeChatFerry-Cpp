@@ -1,9 +1,5 @@
 set(TARGET app)
 
-find_package(fmt REQUIRED)
-find_package(nng REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Core)
-
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__FILENAME__='"$(notdir $<)'"")
 
@@ -25,11 +21,14 @@ set(SOURCES
 add_executable(${TARGET}
     ${SOURCES}
 )
+find_package(spdlog CONFIG REQUIRED)
+find_package(nng CONFIG REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS Core)
 target_link_libraries(${TARGET}
     PRIVATE
     sdk
     nnrpc
-    fmt::fmt
+    spdlog::spdlog_header_only
     nng::nng
     Qt6::Core
 )

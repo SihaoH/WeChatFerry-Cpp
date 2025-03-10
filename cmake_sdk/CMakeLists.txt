@@ -1,10 +1,8 @@
 set(TARGET sdk)
 
-find_package(fmt REQUIRED)
-
 set(SOURCES
     ${WCF_DIR}/com/util.h
-    ${WCF_DIR}/com/log.h
+    ${WCF_DIR}/com/log.hpp
     ${WCF_DIR}/sdk/framework.h
     ${WCF_DIR}/sdk/injector.h
     ${WCF_DIR}/sdk/sdk.h
@@ -12,7 +10,6 @@ set(SOURCES
 
 set(HEADERS
     ${WCF_DIR}/com/util.cpp
-    ${WCF_DIR}/com/log.cpp
     ${WCF_DIR}/sdk/dllmain.cpp
     ${WCF_DIR}/sdk/injector.cpp
     ${WCF_DIR}/sdk/sdk.cpp
@@ -20,9 +17,10 @@ set(HEADERS
 )
 
 add_library(${TARGET} SHARED ${SOURCES} ${HEADERS})
+find_package(spdlog CONFIG REQUIRED)
 target_link_libraries(${TARGET}
     PRIVATE
-    fmt::fmt
+    spdlog::spdlog_header_only
 )
 target_include_directories(${TARGET}
     PUBLIC
@@ -35,3 +33,10 @@ target_include_directories(${TARGET}
 target_compile_options(${TARGET} PRIVATE "/permissive-" "/EHa" "/utf-8" "/MD$<$<CONFIG:Debug>:d>")
 target_compile_definitions(${TARGET} PRIVATE "WIN32;NDEBUG;SDK_EXPORTS;_WINDOWS;_USRDLL;_UNICODE")
 target_link_options(${TARGET} PRIVATE "/SUBSYSTEM:WINDOWS")
+
+# øΩ±¥≈‰÷√Œƒº˛
+add_custom_command(
+    TARGET ${TARGET} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/WeChatFerry/WeChatFerry/DISCLAIMER.md ${CMAKE_OUTPUT_DIRECTORY_INTDIR}/DISCLAIMER.md
+    DEPENDS ${PROJECT_SOURCE_DIR}/WeChatFerry/WeChatFerry/DISCLAIMER.md
+)

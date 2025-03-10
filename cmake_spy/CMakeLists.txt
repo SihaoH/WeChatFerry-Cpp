@@ -1,54 +1,50 @@
 set(TARGET spy)
 
-find_package(fmt REQUIRED)
-find_package(nng REQUIRED)
-find_package(minhook REQUIRED)
-
 set(SOURCES
-    ${WCF_DIR}/com/log.cpp
     ${WCF_DIR}/com/util.cpp
-    ${WCF_DIR}/rpc/nanopb/pb_common.c
-    ${WCF_DIR}/rpc/nanopb/pb_decode.c
-    ${WCF_DIR}/rpc/nanopb/pb_encode.c
-    ${WCF_DIR}/rpc/pb_util.cpp
-    ${WCF_DIR}/rpc/proto/wcf.pb.c
-    ${WCF_DIR}/spy/chatroom_mgmt.cpp
-    ${WCF_DIR}/spy/funcs.cpp
+    ${WCF_DIR}/spy/account_manager.cpp
+    ${WCF_DIR}/spy/chatroom_manager.cpp
+    ${WCF_DIR}/spy/contact_manager.cpp
+    ${WCF_DIR}/spy/database_executor.cpp
     ${WCF_DIR}/spy/dllmain.cpp
-    ${WCF_DIR}/spy/exec_sql.cpp
-    ${WCF_DIR}/spy/contact_mgmt.cpp
-    ${WCF_DIR}/spy/receive_msg.cpp
+    ${WCF_DIR}/spy/message_handler.cpp
+    ${WCF_DIR}/spy/message_sender.cpp
+    ${WCF_DIR}/spy/misc_manager.cpp
     ${WCF_DIR}/spy/rpc_server.cpp
-    ${WCF_DIR}/spy/send_msg.cpp
     ${WCF_DIR}/spy/spy.cpp
-    ${WCF_DIR}/spy/user_info.cpp
     ${WCF_DIR}/spy/spy.def
+    ${WCF_DIR}/spy/spy.rc
 )
 set(HEADERS
-    ${WCF_DIR}/com/log.h
+    ${WCF_DIR}/com/log.hpp
     ${WCF_DIR}/com/util.h
     ${WCF_DIR}/smc/codec.h
-    ${WCF_DIR}/spy/chatroom_mgmt.h
-    ${WCF_DIR}/spy/funcs.h
-    ${WCF_DIR}/spy/exec_sql.h
+    ${WCF_DIR}/spy/account_manager.h
+    ${WCF_DIR}/spy/chatroom_manager.h
+    ${WCF_DIR}/spy/contact_manager.h
+    ${WCF_DIR}/spy/database_executor.h
     ${WCF_DIR}/spy/framework.h
-    ${WCF_DIR}/spy/contact_mgmt.h
-    ${WCF_DIR}/spy/receive_msg.h
+    ${WCF_DIR}/spy/message_handler.h
+    ${WCF_DIR}/spy/message_sender.h
+    ${WCF_DIR}/spy/misc_manager.h
+    ${WCF_DIR}/spy/offsets.h
     ${WCF_DIR}/spy/resource.h
+    ${WCF_DIR}/spy/rpc_helper.h
     ${WCF_DIR}/spy/rpc_server.h
-    ${WCF_DIR}/spy/send_msg.h
     ${WCF_DIR}/spy/spy.h
     ${WCF_DIR}/spy/spy_types.h
     ${WCF_DIR}/spy/sqlite3.h
-    ${WCF_DIR}/spy/user_info.h
 )
 
 add_library(${TARGET} SHARED ${SOURCES} ${HEADERS})
+find_package(spdlog CONFIG REQUIRED)
+find_package(nng CONFIG REQUIRED)
+find_package(minhook CONFIG REQUIRED)
 target_link_libraries(${TARGET}
     PRIVATE
     smc
     nnrpc
-    fmt::fmt
+    spdlog::spdlog_header_only
     minhook::minhook
     nng::nng
 )

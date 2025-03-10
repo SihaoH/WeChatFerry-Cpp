@@ -27,7 +27,11 @@ target_include_directories(${TARGET}
     ${WCF_DIR}/rpc
     ${WCF_DIR}/rpc/nanopb
     ${WCF_DIR}/rpc/proto
-    ${VCPKG_INCLUDE_DIR}
+)
+find_package(spdlog CONFIG REQUIRED)
+target_link_libraries(${TARGET}
+    PRIVATE
+    spdlog::spdlog_header_only
 )
 target_compile_options(${TARGET} PRIVATE "/permissive-" "/EHa" "/utf-8" "/MD$<$<CONFIG:Debug>:d>")
 
