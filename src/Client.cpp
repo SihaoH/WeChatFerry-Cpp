@@ -338,7 +338,7 @@ void Client::setReceiveMessage(bool enabled)
     if (enabled) {
         req.func = Functions_FUNC_ENABLE_RECV_TXT;
         auto rsp = sendRequest(req);
-        if (rsp->msg.status == 0) {
+        if (rsp->msg.status != -1) {
             msgSocket->connectToHost(NNG_HOST, nngPort + 1);
         }
     } else {

@@ -81,10 +81,9 @@ void Application::reloadConfig(bool is_first)
                 if (chatRobot) {
                     delete chatRobot;
                 }
-                LOG(info) << "初始化聊天机器人：设置模型及投喂初始提示语...";
+                LOG(info) << "初始化聊天机器人：设置模型...";
                 chatRobot = new ChatRobot();
                 chatRobot->setModel(cfg_robot.value("model").toString());
-                chatRobot->setPrompt(cfg_robot.value("prompt").toString());
             }
 
             // 读取邀请配置
