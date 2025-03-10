@@ -1,6 +1,6 @@
 # WeChatFerry-Cpp
 
-0.1分支引入了Qt6，主要是为了更好的处理中文字符串（其实是工作用习惯了）
+0.1分支引入了Qt6，主要是为了更好的处理中文字符串（其实就是工作中用习惯了）
 
 整体流程：启动后注入WCF，读取config.json文件进行相关配置，等待用户登录，确认登录后开始监听微信消息，将收取到的消息放到列表里，每秒进行一次处理，处理的分支有：管理员（大号）远程配置、好友发送关键词拉ta进群、在指定群聊里使用AI自动回复。
 
@@ -60,6 +60,9 @@ cmake --install . --config debug
 ### ollama
 ChatRobot类接入了ollama，实现使用AI自动回复的功能。
 ollama需要自行去[官网下载](https://ollama.com/)并安装运行，推荐使用qwen2.5模型，更符合聊天的场景。
+
+使用Modelfile来微调自己所需的模型
+`ollama create wechatbot -f ./Modelfile`
 
 ## 设计思路
 完整的流程都在Application类中实现了，Client则对WCF的主要功能进行了封装，DataUtil和NngClient也是类似，为了更好地管理对象的释放，使用C++类和智能指针将数据收发和数据处理封装了一层。
