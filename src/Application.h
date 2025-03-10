@@ -39,7 +39,7 @@ private:
     int nngPort = 16888;
     int waitTime = 0;
     bool isReceiving = false;
-    bool isAutoReplying = false;
+    bool isAutoReplying = true;
     class Client* client = nullptr;
     class QTimer* handleTimer = nullptr;
     class ChatRobot* chatRobot = nullptr;

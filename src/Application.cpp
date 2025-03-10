@@ -251,7 +251,7 @@ void Application::onHandle()
                     QString texts;
                     for (const auto& msg : section.list) {
                         if (msg.type == MsgType::Text) {
-                            texts.append(QString("%1: %2\n").arg(msg.name).arg(msg.content));
+                            texts.append(msg.content + "\n");
                         }
                     }
                     auto reply = chatRobot->talk(wxid, texts);
