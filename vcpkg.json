@@ -9,6 +9,7 @@
         "nng",
         "magic-enum",
         "minhook",
-        "mp3lame"
+        "mp3lame",
+        "cpp-httplib"
     ]
 }

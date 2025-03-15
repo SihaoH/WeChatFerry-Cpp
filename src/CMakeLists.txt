@@ -23,6 +23,7 @@ add_executable(${TARGET}
 )
 find_package(spdlog CONFIG REQUIRED)
 find_package(nng CONFIG REQUIRED)
+find_package(httplib CONFIG REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Core)
 target_link_libraries(${TARGET}
     PRIVATE
@@ -30,6 +31,7 @@ target_link_libraries(${TARGET}
     nnrpc
     spdlog::spdlog_header_only
     nng::nng
+    httplib::httplib
     Qt6::Core
 )
 target_compile_options(${TARGET} PRIVATE "/utf-8" "/MD$<$<CONFIG:Debug>:d>")

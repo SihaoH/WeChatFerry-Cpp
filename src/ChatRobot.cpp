@@ -1,27 +1,31 @@
 ﻿#include "ChatRobot.h"
 #include "Logger.h"
-#include "ollama.hpp"
+#include <httplib.h>
 #include <QRegularExpression>
+#include <QScopedPointer>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QFile>
 
 class ChatRobotPrivate
 {
 public:
-    ChatRobotPrivate() : ollama("http://localhost:11434") {}
+    ChatRobotPrivate() : ollama(new httplib::Client("http://localhost:11434")) {}
     ~ChatRobotPrivate() = default;
 
-    void setPrompt(const QString& prompt);
     void setModel(const QString& _model);
     QString talk(const QString& wxid, const QString& content, const QStringList& images);
 
 private:
-    std::string model = "qwen2.5:3b";
-    Ollama ollama;
-    QMap<QString, ollama::response> contextMap;
+    QString model = "qwen2.5:3b";
+    QScopedPointer<httplib::Client> ollama;
+    QMap<QString, QVariantList> contextMap;
 };
 
 void ChatRobotPrivate::setModel(const QString& _model)
 {
-    model = std::string(_model.toUtf8());
+    model = _model;
 }
 
 QString ChatRobotPrivate::talk(const QString& wxid, const QString& content, const QStringList& images)
@@ -36,19 +40,50 @@ QString ChatRobotPrivate::talk(const QString& wxid, const QString& content, cons
         question = content;
     }
     QString reply;
-    ollama::response context;
-    std::vector<std::string> std_images;
-    for (const auto& img : images) {
-        std_images.push_back(ollama::image::from_file(std::string(img.toUtf8())));
+    
+    QJsonObject requestObj;
+    requestObj["model"] = model;
+    requestObj["prompt"] = question;
+    requestObj["stream"] = false;
+    
+    // 如果有上下文，添加到请求中
+    if (contextMap.contains(wxid)) {
+        requestObj["context"] = QJsonArray::fromVariantList(contextMap[wxid]);
     }
-    ollama::options options;
-    context = ollama.generate(model, std::string(question.toUtf8()), contextMap[wxid], options, std_images);
-    // 如果记住了带有图片的上下文，则每次生成都需要带着那些图片数据
-    if (std_images.empty()) {
-        contextMap[wxid] = context;
+    
+    // 如果有图片，添加到请求中
+    if (!images.isEmpty()) {
+        QJsonArray imageArray;
+        for (const auto& img : images) {
+            QFile file(img);
+            if (file.open(QIODevice::ReadOnly)) {
+                QByteArray imageData = file.readAll();
+                imageArray.append(QString::fromLatin1(imageData.toBase64()));
+            }
+        }
+        requestObj["images"] = imageArray;
     }
-    reply = QString::fromStdString(context.as_simple_string()).trimmed();
-    return reply;
+    
+    QJsonDocument requestDoc(requestObj);
+    auto res = ollama->Post("/api/generate", 
+                          requestDoc.toJson(QJsonDocument::Compact).toStdString(),
+                          "application/json");
+    
+    if (res && res->status == 200) {
+        QJsonDocument responseDoc = QJsonDocument::fromJson(QByteArray::fromStdString(res->body));
+        QJsonObject responseObj = responseDoc.object();
+        
+        reply = responseObj["response"].toString();
+        
+        // 保存上下文，但只在没有图片的情况下
+        if (images.isEmpty() && responseObj.contains("context")) {
+            contextMap[wxid] = responseObj["context"].toArray().toVariantList();
+        }
+    } else {
+        reply = "抱歉，我遇到了一些问题，请稍后再试。";
+    }
+    
+    return reply.trimmed();
 }
 
 ChatRobot::ChatRobot()
