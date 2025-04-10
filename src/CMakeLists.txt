@@ -1,7 +1,6 @@
 set(TARGET app)
 
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__FILENAME__='"$(notdir $<)'"")
 
 set(SOURCES
     main.cpp
@@ -18,9 +17,7 @@ set(SOURCES
     NngSocket.h
     NngSocket.cpp
 )
-add_executable(${TARGET}
-    ${SOURCES}
-)
+add_executable(${TARGET} ${SOURCES})
 find_package(spdlog CONFIG REQUIRED)
 find_package(nng CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
@@ -40,9 +37,8 @@ target_compile_definitions(${TARGET} PRIVATE "_UNICODE")
 # 修改从VS启动时的工作目录路径
 set_target_properties(${TARGET} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_OUTPUT_DIRECTORY_INTDIR})
 
-# 拷贝配置文件
+# 为config.json创建符号链接
 add_custom_command(
     TARGET ${TARGET} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/config.json ${CMAKE_OUTPUT_DIRECTORY_INTDIR}/config.json
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/config.json
+    COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/config.json ${CMAKE_OUTPUT_DIRECTORY_INTDIR}/config.json
 )
