@@ -14,6 +14,7 @@ public:
         Image = 0x03,
         Audio = 0x22,
         Video = 0x2B,
+        Emoji = 0x2F,
         Refer = 0x31, // 引用
         Other = 0xFFFFFFFF // 其他未实现处理的类型
     };
@@ -53,7 +54,7 @@ public:
     void sendRichText(const QMap<QString, QString>& args); // 参数比较多，直接用map
     void sendXml(const QString& wxid, const QString& xml, int type, const QString& img = QString());
     void sendImage(const QString& wxid, const QString& img);
-    void sendEmotion(const QString& wxid, const QString& gif);
+    void sendEmoji(const QString& wxid, const QString& gif);
     void sendFile(const QString& wxid, const QString& file);
     void sendPatPat(const QString& roomid, const QString& wxid);
 
@@ -80,7 +81,13 @@ private:
     void pullGroupMembers(const QString& wxid, bool refresh = false);
 
 private:
-    const int dlTimes = 10;
+    QString downloadImage(const uint64_t id, const QString& extra);
+    QString downloadEmoji(const QString& xml);
+    QString downloadAudio(const uint64_t id);
+    QString downloadVideo(const uint64_t id, const QString& thumb);
+
+private:
+    const int MaxDownloadTimes = 10;
     int nngPort;
     bool isReceiving = false;
     class NngSocket* reqSocket = nullptr;

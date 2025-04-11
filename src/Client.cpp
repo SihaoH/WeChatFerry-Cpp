@@ -1,10 +1,13 @@
 ﻿#include "Client.h"
 #include "Logger.h"
 #include "NngSocket.h"
-#include "DataUtil.h"
 #include <QThread>
 #include <QRegularExpression>
 #include <QDir>
+#include <QUrl>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QEventLoop>
 
 constexpr const char* NNG_HOST = "tcp://127.0.0.1";
 
@@ -181,6 +184,116 @@ void Client::pullGroupMembers(const QString& wxid, bool refresh)
     }
 }
 
+QString Client::downloadImage(const uint64_t id, const QString& extra)
+{
+    Request req = Request_init_default;
+    req.func = Functions_FUNC_DOWNLOAD_ATTACH;
+    req.which_msg = Request_att_tag;
+    req.msg.att.id = id;
+    req.msg.att.extra = extra.toUtf8().data();
+    if (sendRequest(req)->msg.status != 0) {
+        LOG(err) << "下载图片失败！";
+    }
+    req = Request_init_default;
+    req.func = Functions_FUNC_DECRYPT_IMAGE;
+    req.which_msg = Request_dec_tag;
+    req.msg.dec.src = extra.toUtf8().data();
+    req.msg.dec.dst = (char*)".//images/"; // 这里要双斜杠，不然spy创建的文件夹名称会缺少首字母i
+    int times = 0;
+    QString img_file;
+    while (img_file.isEmpty()) {
+        if ((times += 1) > MaxDownloadTimes) {
+            LOG(err) << "解密图片失败！";
+            break;
+        }
+        auto rsp = sendRequest(req);
+        img_file = rsp->msg.str;
+        QThread::sleep(1);
+    }
+    return img_file;
+}
+
+QString Client::downloadEmoji(const QString& xml)
+{
+    QString emoji_file;
+    auto match = QRegularExpression("cdnurl=\"([^\"]+)\"").match(xml);
+    if (match.hasMatch()) {
+        auto url = QUrl(match.captured(1).replace("&amp;", "&"));
+        QDir dir("./emoji/");
+        if (!dir.exists()) {
+            dir.mkpath(".");
+        }
+
+        QString gif_file = QString("./emoji/%1.gif").arg(QDateTime::currentMSecsSinceEpoch());
+        QNetworkAccessManager manager;
+        QNetworkRequest request(url);
+        QNetworkReply* reply = manager.get(request);
+
+        QEventLoop loop;
+        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        loop.exec();
+
+        if (reply->error() == QNetworkReply::NoError) {
+            QFile file(gif_file);
+            if (file.open(QIODevice::WriteOnly)) {
+                file.write(reply->readAll());
+                file.close();
+            } else {
+                LOG(err) << "保存表情文件失败！";
+                gif_file.clear();
+            }
+        } else {
+            LOG(err) << "下载表情文件失败：" << reply->errorString();
+            gif_file.clear();
+        }
+
+        emoji_file = gif_file;
+    }
+    return emoji_file;
+}
+
+QString Client::downloadAudio(const uint64_t id)
+{
+    Request req = Request_init_default;
+    req.func = Functions_FUNC_GET_AUDIO_MSG;
+    req.which_msg = Request_am_tag;
+    req.msg.am.id = id;
+    req.msg.am.dir = (char*)"./audio/";
+    QDir dir("./audio/");
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    int times = 0;
+    QString audio_file;
+    while (audio_file.isEmpty()) {
+        if ((times += 1) > MaxDownloadTimes) {
+            LOG(err) << "获取语音数据失败！";
+            break;
+        }
+        auto rsp = sendRequest(req);
+        audio_file = rsp->msg.str;
+        QThread::sleep(1);
+    }
+    return audio_file;
+}
+
+QString Client::downloadVideo(const uint64_t id, const QString& thumb)
+{
+    Request req = Request_init_default;
+    req.func = Functions_FUNC_DOWNLOAD_ATTACH;
+    req.which_msg = Request_att_tag;
+    req.msg.att.id = id;
+    req.msg.att.thumb = thumb.toUtf8().data();
+    QString video_file;
+    if (sendRequest(req)->msg.status == 0) {
+        video_file = thumb;
+        video_file.replace(".jpg", ".mp4");
+    } else {
+        LOG(err) << "下载视频失败！";
+    }
+    return video_file;
+}
+
 void Client::sendText(const QString& wxid, const QString& txt)
 {
     QString after_txt = txt;
@@ -252,7 +365,7 @@ void Client::sendImage(const QString& wxid, const QString& img)
     sendFileRequest(Functions_FUNC_SEND_IMG, wxid, img);
 }
 
-void Client::sendEmotion(const QString& wxid, const QString& gif)
+void Client::sendEmoji(const QString& wxid, const QString& gif)
 {
     sendFileRequest(Functions_FUNC_SEND_EMOTION, wxid, gif);
 }
@@ -399,74 +512,28 @@ Client::Message Client::receiveMessage(Client::Options opt)
             }
             break;
         }
+        case MsgType::Emoji: {
+            auto emoji_file = downloadEmoji(wxmsg.content);
+            msg.content.append(emoji_file);
+            has_useful = !emoji_file.isEmpty();
+            break;
+        }
         case MsgType::Image: {
-            Request req = Request_init_default;
-            req.func = Functions_FUNC_DOWNLOAD_ATTACH;
-            req.which_msg = Request_att_tag;
-            req.msg.att.id = wxmsg.id;
-            req.msg.att.extra = wxmsg.extra;
-            if (sendRequest(req)->msg.status != 0) {
-                LOG(err) << "下载图片失败！";
-            }
-            req = Request_init_default;
-            req.func = Functions_FUNC_DECRYPT_IMAGE;
-            req.which_msg = Request_dec_tag;
-            req.msg.dec.src = wxmsg.extra;
-            req.msg.dec.dst = (char*)".//images/"; // 这里要双斜杠，不然spy创建的文件夹名称会缺少首字母i
-            int times = 0;
-            QString img_file;
-            while (img_file.isEmpty()) {
-                if ((times += 1) > dlTimes) {
-                    LOG(err) << "解密图片失败！";
-                    break;
-                }
-                auto rsp = sendRequest(req);
-                img_file = rsp->msg.str;
-                QThread::sleep(1);
-            }
+            auto img_file = downloadImage(wxmsg.id, wxmsg.extra);
             msg.content.append(img_file);
             has_useful = !img_file.isEmpty();
             break;
         }
         case MsgType::Audio: {
-            Request req = Request_init_default;
-            req.func = Functions_FUNC_GET_AUDIO_MSG;
-            req.which_msg = Request_am_tag;
-            req.msg.am.id = wxmsg.id;
-            req.msg.am.dir = (char*)"./audio/";
-            QDir dir("./audio/");
-            if (!dir.exists()) {
-                dir.mkpath(".");
-            }
-            int times = 0;
-            QString audio_file;
-            while (audio_file.isEmpty()) {
-                if ((times += 1) > dlTimes) {
-                    LOG(err) << "获取语音数据失败！";
-                    break;
-                }
-                auto rsp = sendRequest(req);
-                audio_file = rsp->msg.str;
-                QThread::sleep(1);
-            }
+            auto audio_file = downloadAudio(wxmsg.id);
             msg.content.append(audio_file);
             has_useful = !audio_file.isEmpty();
             break;
         }
         case MsgType::Video: {
-            Request req = Request_init_default;
-            req.func = Functions_FUNC_DOWNLOAD_ATTACH;
-            req.which_msg = Request_att_tag;
-            req.msg.att.id = wxmsg.id;
-            req.msg.att.thumb = wxmsg.thumb;
-            if (sendRequest(req)->msg.status == 0) {
-                QString video_file = wxmsg.thumb;
-                video_file.replace(".jpg", ".mp4");
-                msg.content.append(video_file);
-                has_useful = true;
-            } else {
-                LOG(err) << "下载视频失败！";
-            }
+            auto video_file = downloadAudio(wxmsg.id);
+            msg.content.append(video_file);
+            has_useful = !video_file.isEmpty();
             break;
         }
         default:

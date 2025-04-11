@@ -201,7 +201,7 @@ void Application::asyncReceiving()
 {
     while (isReceiving) {
         Client::Options opt;
-        opt.types = { MsgType::Text, MsgType::Image, MsgType::Audio, MsgType::Video, MsgType::Refer };
+        opt.types = { MsgType::Text, MsgType::Image, MsgType::Emoji, MsgType::Audio, MsgType::Video, MsgType::Refer };
         opt.onlyAter = chatConfig.onlyAter;
         auto msg = client->receiveMessage(opt);
 

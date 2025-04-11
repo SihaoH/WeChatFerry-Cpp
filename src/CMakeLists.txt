@@ -21,7 +21,7 @@ add_executable(${TARGET} ${SOURCES})
 find_package(spdlog CONFIG REQUIRED)
 find_package(nng CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Core)
+find_package(Qt6 REQUIRED COMPONENTS Core Network)
 target_link_libraries(${TARGET}
     PRIVATE
     sdk
@@ -30,6 +30,7 @@ target_link_libraries(${TARGET}
     nng::nng
     httplib::httplib
     Qt6::Core
+    Qt6::Network
 )
 target_compile_options(${TARGET} PRIVATE "/utf-8" "/MD$<$<CONFIG:Debug>:d>")
 target_compile_definitions(${TARGET} PRIVATE "_UNICODE")
